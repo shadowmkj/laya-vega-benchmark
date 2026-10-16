@@ -53,11 +53,11 @@ def on_startup():
 LAYA_QUESTION = {
     "action": {
         "type": "choice",
-        "instructions": "Chrome Dino runner. Choose whether to jump, duck, or run.",
+        "instructions": "Chrome Dino game survival action. Choose whether to jump, duck, or run.",
         "criteria": {
-            "jump": "Ground obstacle (cactus or low bird) approaching ahead. Jump over it.",
-            "duck": "Mid-height flying bird approaching at head level. Duck underneath it.",
-            "run": "Track ahead is clear, obstacle is far away, or high bird will pass overhead safely.",
+            "jump": "A cactus on the ground or low hazard is close ahead. Dino must jump over it. Ducking is fatal against cacti.",
+            "duck": "A flying bird/pterodactyl at head-height is close ahead. Dino must duck underneath it. Never duck for a cactus.",
+            "run": "The runway ahead is clear, obstacle is distant, or high bird flies safely overhead. Keep running.",
         },
     }
 }
@@ -65,11 +65,11 @@ LAYA_QUESTION = {
 VEGA_QUESTION = {
     "action": {
         "type": "choice",
-        "instructions": "Chrome Dino runner. Choose whether to jump, duck, or run.",
+        "instructions": "Chrome Dino game survival action. Choose whether to jump, duck, or run.",
         "criteria": {
-            "jump": "Ground obstacle (cactus or low bird) approaching ahead. Leap over it.",
-            "duck": "Mid-height flying bird approaching at head level. Duck underneath it.",
-            "run": "Track ahead is clear, obstacle is far away, or high bird will pass overhead safely.",
+            "jump": "A cactus on the ground or low hazard is close ahead. Dino must jump over it. Ducking is fatal against cacti.",
+            "duck": "A flying bird/pterodactyl at head-height is close ahead. Dino must duck underneath it. Never duck for a cactus.",
+            "run": "The runway ahead is clear, obstacle is distant, or high bird flies safely overhead. Keep running.",
         },
     }
 }
@@ -165,12 +165,29 @@ def predict(req: PredictRequest):
             budget,
         )
 
+        if obs_type == "cactus":
+            obstacle_desc = "cactus on the ground"
+        elif obs_type == "pterodactyl":
+            if altitude == "mid":
+                obstacle_desc = "flying pterodactyl at head level"
+            elif altitude == "high":
+                obstacle_desc = "flying pterodactyl high overhead"
+            else:
+                obstacle_desc = "flying pterodactyl low to the ground"
+        else:
+            obstacle_desc = f"{obs_type} ({altitude})"
+
+        if 0 < dist <= 8.5:
+            proximity = f"dangerously close ({dist:.1f} cells ahead)"
+        else:
+            proximity = f"distant ({dist:.1f} cells ahead)"
+
         if model_name == "vega":
             v = get_vega()
             formatted_state = (
-                f"Obstacle: {obs_type} at altitude {altitude}. Distance: {dist:.1f} cells. "
-                f"Grounded: {'yes' if grounded else 'no'}. "
-                f"Ducking: {'yes' if ducking else 'no'}. Latency budget: {budget:.0f}ms."
+                f"Obstacle: {obstacle_desc}. Distance: {proximity}. "
+                f"Dino is {'grounded and running' if grounded else 'airborne'}. "
+                f"Latency budget: {budget:.0f}ms."
             )
             res = v.decide(formatted_state, VEGA_QUESTION)
             ans = res.get("answers", {}).get("action", {})
@@ -180,10 +197,9 @@ def predict(req: PredictRequest):
         else:
             l = get_laya()
             formatted_state = {
-                "obstacle": f"{obs_type} ({altitude})",
-                "distance": f"{dist:.1f} cells",
-                "grounded": "yes" if grounded else "no",
-                "ducking": "yes" if ducking else "no",
+                "obstacle": obstacle_desc,
+                "distance": proximity,
+                "dino_state": "running on the ground" if grounded else "airborne",
             }
             if budget > 0:
                 formatted_state["latency_budget"] = f"{budget:.0f}ms"

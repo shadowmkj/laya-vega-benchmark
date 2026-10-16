@@ -621,13 +621,12 @@ export const App: React.FC = () => {
 											<div className="flex items-center justify-between">
 												<div className="flex items-center gap-2">
 													<span
-														className={`px-2.5 py-1 rounded text-xs font-bold border tracking-wider flex items-center gap-1 ${
-															latest.action === 'JUMP'
+														className={`px-2.5 py-1 rounded text-xs font-bold border tracking-wider flex items-center gap-1 ${latest.action === 'JUMP'
 																? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
 																: latest.action === 'DUCK'
-																? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
-																: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
-														}`}
+																	? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
+																	: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+															}`}
 													>
 														{latest.action === 'JUMP' ? '▲ JUMP' : latest.action === 'DUCK' ? '▼ DUCK' : '► RUN'}
 													</span>
@@ -737,13 +736,12 @@ export const App: React.FC = () => {
 										<div className="flex items-center justify-between mb-1">
 											<div className="flex items-center gap-1.5">
 												<span
-													className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-														m.action === 'JUMP'
+													className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${m.action === 'JUMP'
 															? 'bg-amber-500/20 text-amber-300'
 															: m.action === 'DUCK'
-															? 'bg-cyan-500/20 text-cyan-300'
-															: 'bg-emerald-500/20 text-emerald-300'
-													}`}
+																? 'bg-cyan-500/20 text-cyan-300'
+																: 'bg-emerald-500/20 text-emerald-300'
+														}`}
 												>
 													{m.action}
 												</span>

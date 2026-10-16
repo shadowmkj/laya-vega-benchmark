@@ -22,11 +22,11 @@ vega_model = None
 LAYA_QUESTION = {
     "action": {
         "type": "choice",
-        "instructions": "Chrome Dino game. Pick JUMP, DUCK, or RUN to avoid crashing into obstacles.",
+        "instructions": "Chrome Dino game survival action. Choose whether to jump, duck, or run.",
         "criteria": {
-            "jump": "Ground obstacle (cactus or low bird) approaching ahead. Leap over it.",
-            "duck": "Mid-height flying bird approaching at head level. Duck underneath it.",
-            "run": "Runway is clear, obstacle is far away, or high bird will pass overhead safely.",
+            "jump": "A cactus on the ground or low hazard is close ahead. Dino must jump over it. Ducking is fatal against cacti.",
+            "duck": "A flying bird/pterodactyl at head-height is close ahead. Dino must duck underneath it. Never duck for a cactus.",
+            "run": "The runway ahead is clear, obstacle is distant, or high bird flies safely overhead. Keep running.",
         },
     }
 }
@@ -34,11 +34,11 @@ LAYA_QUESTION = {
 VEGA_QUESTION = {
     "action": {
         "type": "choice",
-        "instructions": "Avoid obstacles in Chrome Dino by jumping, ducking, or running.",
+        "instructions": "Chrome Dino game survival action. Choose whether to jump, duck, or run.",
         "criteria": {
-            "jump": "Ground obstacle (cactus or low bird) is close and Dino must jump.",
-            "duck": "Flying bird at head height is close and Dino must duck underneath.",
-            "run": "Runway is clear, obstacle is far away, or high bird will clear overhead.",
+            "jump": "A cactus on the ground or low hazard is close ahead. Dino must jump over it. Ducking is fatal against cacti.",
+            "duck": "A flying bird/pterodactyl at head-height is close ahead. Dino must duck underneath it. Never duck for a cactus.",
+            "run": "The runway ahead is clear, obstacle is distant, or high bird flies safely overhead. Keep running.",
         },
     }
 }
@@ -74,7 +74,7 @@ def get_vega():
     return vega_model
 
 
-def decide_laya(state: dict) -> tuple[str, float]:
+def decide_laya(state: dict) -> tuple[str, float, dict]:
     model = get_laya()
     dist = float(state.get("distance_to_cactus", state.get("distance_to_obstacle", 999.0)))
     grounded = bool(state.get("dino_is_grounded", True))
@@ -85,13 +85,27 @@ def decide_laya(state: dict) -> tuple[str, float]:
     obs_type = str(state.get("obstacle_type", "cactus")).lower()
     altitude = str(state.get("obstacle_altitude", "ground")).lower()
 
+    if obs_type == "cactus":
+        obstacle_desc = "cactus on the ground"
+    elif obs_type == "pterodactyl":
+        if altitude == "mid":
+            obstacle_desc = "flying pterodactyl at head level"
+        elif altitude == "high":
+            obstacle_desc = "flying pterodactyl high overhead"
+        else:
+            obstacle_desc = "flying pterodactyl low to the ground"
+    else:
+        obstacle_desc = f"{obs_type} ({altitude})"
+
+    if 0 < dist <= 8.5:
+        proximity = f"dangerously close ({dist:.1f} cells ahead)"
+    else:
+        proximity = f"distant ({dist:.1f} cells ahead)"
+
     formatted_state = {
-        "obstacle": f"{obs_type} ({altitude})",
-        "distance": f"{dist:.1f} cells",
-        "grounded": "yes" if grounded else "no",
-        "ducking": "yes" if ducking else "no",
-        "speed": f"{speed:.2f}",
-        "width": width,
+        "obstacle": obstacle_desc,
+        "distance": proximity,
+        "dino_state": "running on the ground" if grounded else "airborne",
     }
     if budget > 0:
         formatted_state["latency_budget"] = f"{budget:.0f}ms"
@@ -110,6 +124,7 @@ def decide_laya(state: dict) -> tuple[str, float]:
         for k in probabilities:
             if k != action.lower():
                 probabilities[k] = max(0.0, rem)
+
     return action, confidence, probabilities
 
 
@@ -124,10 +139,27 @@ def decide_vega(state: dict) -> tuple[str, float, dict]:
     obs_type = str(state.get("obstacle_type", "cactus")).lower()
     altitude = str(state.get("obstacle_altitude", "ground")).lower()
 
+    if obs_type == "cactus":
+        obstacle_desc = "cactus on the ground"
+    elif obs_type == "pterodactyl":
+        if altitude == "mid":
+            obstacle_desc = "flying pterodactyl at head level"
+        elif altitude == "high":
+            obstacle_desc = "flying pterodactyl high overhead"
+        else:
+            obstacle_desc = "flying pterodactyl low to the ground"
+    else:
+        obstacle_desc = f"{obs_type} ({altitude})"
+
+    if 0 < dist <= 8.5:
+        proximity = f"dangerously close ({dist:.1f} cells ahead)"
+    else:
+        proximity = f"distant ({dist:.1f} cells ahead)"
+
     formatted_state = (
-        f"Obstacle: {obs_type} at altitude {altitude}. Distance: {dist:.1f} cells. "
-        f"Grounded: {'yes' if grounded else 'no'}. Ducking: {'yes' if ducking else 'no'}. "
-        f"Width: {width}. Speed: {speed:.2f}. Latency budget: {budget:.0f}ms."
+        f"Obstacle: {obstacle_desc}. Distance: {proximity}. "
+        f"Dino is {'grounded and running' if grounded else 'airborne'}. "
+        f"Latency budget: {budget:.0f}ms."
     )
     res = model.decide(formatted_state, VEGA_QUESTION)
     ans = res.get("answers", {}).get("action", {})
@@ -143,6 +175,7 @@ def decide_vega(state: dict) -> tuple[str, float, dict]:
         for k in probabilities:
             if k != action.lower():
                 probabilities[k] = max(0.0, rem)
+
     return action, confidence, probabilities
 
 
