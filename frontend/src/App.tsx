@@ -217,8 +217,8 @@ export const App: React.FC = () => {
 						}
 					}
 				} else if (resp.action === 'run') {
-					if (currentObsId) {
-						jumpedObstaclesRef.current.add(currentObsId);
+					if (engine.state.isDucking) {
+						engine.stand();
 					}
 				}
 			} catch (err) {
