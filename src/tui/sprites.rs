@@ -44,3 +44,26 @@ pub const CACTUS_CLUSTER: [&str; 2] = [
     " |   | ",
     "\\|/ \\|/",
 ];
+
+// Dino Ducking: 2 characters high, elongated 13 characters wide
+pub const DINO_DUCK_1: [&str; 2] = [
+    "   .---._____",
+    "==|  __ / /  ",
+];
+
+pub const DINO_DUCK_2: [&str; 2] = [
+    "   .---._____",
+    "==|  __ /  \\ ",
+];
+
+// Flying Pterodactyl: 6 characters wide, 2 characters high
+pub const PTERODACTYL_UP: [&str; 2] = [
+    " __/\\_ ",
+    "<     >",
+];
+
+pub const PTERODACTYL_DOWN: [&str; 2] = [
+    "<     >",
+    " --\\/--",
+];
+

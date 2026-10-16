@@ -128,12 +128,12 @@ impl AgentManager {
             match self.round {
                 ExperimentRound::Round1RawAsync => {
                     // Apply immediately!
-                    if action == "JUMP" {
+                    if action == "JUMP" || action == "DUCK" {
                         return Some(action);
                     }
                 }
                 ExperimentRound::Round2Fixed45msHold => {
-                    if action == "JUMP" {
+                    if action == "JUMP" || action == "DUCK" {
                         let dispatch_time = req_info.map(|(_, t)| t).unwrap_or(now);
                         let execute_at = dispatch_time + std::time::Duration::from_millis(45);
                         if now >= execute_at {

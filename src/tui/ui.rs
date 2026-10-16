@@ -107,25 +107,31 @@ fn render_canvas(frame: &mut Frame, area: Rect, state: &GameState) {
     );
 
     // Draw Dino
-    let dino_sprite = if state.game_over {
-        &DINO_DEAD
+    let (dino_sprite, dino_height, dino_width) = if state.game_over {
+        (&DINO_DEAD[..], 4, 9)
+    } else if state.dino.is_ducking && state.dino.is_grounded {
+        if (state.ticks / 4) % 2 == 0 {
+            (&DINO_DUCK_1[..], 2, 13)
+        } else {
+            (&DINO_DUCK_2[..], 2, 13)
+        }
     } else if !state.dino.is_grounded {
-        &DINO_JUMP
+        (&DINO_JUMP[..], 4, 9)
     } else if (state.ticks / 4) % 2 == 0 {
-        &DINO_RUN_1
+        (&DINO_RUN_1[..], 4, 9)
     } else {
-        &DINO_RUN_2
+        (&DINO_RUN_2[..], 4, 9)
     };
 
     let dino_screen_x = inner.left() + (DINO_X as u16);
-    let dino_screen_y = ground_y.saturating_sub(4 + (state.dino.y as u16));
+    let dino_screen_y = ground_y.saturating_sub(dino_height + (state.dino.y as u16));
 
     for (i, line) in dino_sprite.iter().enumerate() {
         let y = dino_screen_y + (i as u16);
         if y < ground_y {
             frame.render_widget(
                 Paragraph::new(*line).style(Style::default().fg(Color::Green)),
-                Rect::new(dino_screen_x, y, 9, 1),
+                Rect::new(dino_screen_x, y, dino_width, 1),
             );
         }
     }
@@ -137,13 +143,23 @@ fn render_canvas(frame: &mut Frame, area: Rect, state: &GameState) {
             continue;
         }
 
+        let is_bird = matches!(obs.obstacle_type, ObstacleType::Pterodactyl(_));
         let sprite: &[&str] = match obs.obstacle_type {
             ObstacleType::SmallCactus => &CACTUS_SMALL,
             ObstacleType::LargeCactus => &CACTUS_LARGE,
             ObstacleType::Cluster => &CACTUS_CLUSTER,
+            ObstacleType::Pterodactyl(_) => {
+                if (state.ticks / 5) % 2 == 0 {
+                    &PTERODACTYL_UP
+                } else {
+                    &PTERODACTYL_DOWN
+                }
+            }
         };
 
-        let obs_y = ground_y.saturating_sub(obs.height);
+        let obs_y = ground_y.saturating_sub(obs.height + (obs.y_offset.round() as u16));
+        let obs_color = if is_bird { Color::Cyan } else { Color::Red };
+
         for (i, line) in sprite.iter().enumerate() {
             let y = obs_y + (i as u16);
             if y < ground_y && obs_screen_x < inner.right() {
@@ -154,7 +170,7 @@ fn render_canvas(frame: &mut Frame, area: Rect, state: &GameState) {
                     line
                 };
                 frame.render_widget(
-                    Paragraph::new(visible_slice).style(Style::default().fg(Color::Red)),
+                    Paragraph::new(visible_slice).style(Style::default().fg(obs_color)),
                     Rect::new(obs_screen_x, y, visible_slice.len() as u16, 1),
                 );
             }
@@ -176,10 +192,16 @@ fn render_canvas(frame: &mut Frame, area: Rect, state: &GameState) {
 }
 
 fn render_agent_panel(frame: &mut Frame, area: Rect, stats: &TelemetryStats) {
+    let action_color = match stats.last_action.as_str() {
+        "JUMP" => Color::Yellow,
+        "DUCK" => Color::Cyan,
+        _ => Color::Green,
+    };
+
     let text = vec![
         Line::from(vec![
             Span::styled("Last Action: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(&stats.last_action, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Span::styled(&stats.last_action, Style::default().fg(action_color).add_modifier(Modifier::BOLD)),
             Span::styled(format!(" (Conf: {:.1}%)", stats.confidence * 100.0), Style::default().fg(Color::Cyan)),
         ]),
         Line::from(vec![
@@ -190,6 +212,8 @@ fn render_agent_panel(frame: &mut Frame, area: Rect, stats: &TelemetryStats) {
         Line::from(vec![
             Span::styled("[Space/Up]", Style::default().fg(Color::Yellow)),
             Span::raw(" Jump   "),
+            Span::styled("[Down/s]", Style::default().fg(Color::Cyan)),
+            Span::raw(" Duck   "),
             Span::styled("[m/Tab]", Style::default().fg(Color::Yellow)),
             Span::raw(" Switch Model"),
         ]),

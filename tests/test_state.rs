@@ -26,4 +26,22 @@ fn test_observation_projection_with_latency_budget() {
     let obs_projected = state.get_observation(45.0);
     assert!(obs_projected.distance_to_cactus < obs_raw.distance_to_cactus);
     assert_eq!(obs_projected.latency_budget_ms, 45.0);
+    assert_eq!(obs_projected.obstacle_type, "cactus");
+    assert_eq!(obs_projected.obstacle_altitude, "ground");
 }
+
+#[test]
+fn test_observation_with_pterodactyl_and_ducking() {
+    let mut state = GameState::new(42);
+    state.duck();
+    state.obstacles.push(layadino::game::obstacle::Obstacle::new(
+        30.0,
+        layadino::game::obstacle::ObstacleType::Pterodactyl(layadino::game::obstacle::FlightAltitude::Mid),
+    ));
+
+    let obs = state.get_observation(0.0);
+    assert_eq!(obs.obstacle_type, "pterodactyl");
+    assert_eq!(obs.obstacle_altitude, "mid");
+    assert!(obs.dino_is_ducking);
+}
+

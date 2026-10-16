@@ -34,3 +34,31 @@ fn test_dino_jump_and_gravity_arc() {
     assert!(dino.is_grounded);
     assert_eq!(dino.y, 0.0);
 }
+
+#[test]
+fn test_dino_duck_and_timeout() {
+    let mut dino = Dino::new();
+    assert!(!dino.is_ducking);
+
+    dino.duck();
+    assert!(dino.is_ducking);
+    assert_eq!(dino.duck_ticks_remaining, Dino::DEFAULT_DUCK_TICKS);
+
+    // Ticking down
+    for _ in 0..Dino::DEFAULT_DUCK_TICKS {
+        dino.tick(Dino::GRAVITY);
+    }
+    assert!(!dino.is_ducking);
+    assert_eq!(dino.duck_ticks_remaining, 0);
+}
+
+#[test]
+fn test_dino_fast_fall_when_ducking() {
+    let mut dino = Dino::new();
+    dino.jump();
+    let vy_before = dino.vy;
+
+    dino.duck(); // In mid-air -> fast fall acceleration
+    assert!(dino.vy < vy_before);
+}
+

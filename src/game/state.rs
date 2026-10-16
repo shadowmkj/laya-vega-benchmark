@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use super::physics::Dino;
-use super::obstacle::{check_collision, Obstacle, ObstacleSpawner};
+use super::obstacle::{check_collision, FlightAltitude, Obstacle, ObstacleSpawner, ObstacleType};
 
 pub const DINO_X: f32 = 6.0;
 pub const DINO_WIDTH: f32 = 4.0;
@@ -13,7 +13,10 @@ pub struct DinoObservation {
     pub distance_to_cactus: f32,
     pub cactus_width: u16,
     pub cactus_height: u16,
+    pub obstacle_type: String,     // "cactus" or "pterodactyl"
+    pub obstacle_altitude: String, // "ground", "mid", "high"
     pub dino_is_grounded: bool,
+    pub dino_is_ducking: bool,
     pub speed: f32,
     pub latency_budget_ms: f32,
 }
@@ -54,6 +57,14 @@ impl GameState {
         }
     }
 
+    pub fn duck(&mut self) -> bool {
+        if !self.game_over {
+            self.dino.duck()
+        } else {
+            false
+        }
+    }
+
     pub fn tick(&mut self) {
         if self.game_over {
             return;
@@ -69,7 +80,7 @@ impl GameState {
         self.speed = BASE_SPEED + (self.score as f32 / 2000.0).min(0.8);
 
         self.dino.tick(Dino::GRAVITY);
-        self.spawner.tick(self.speed, &mut self.obstacles, TRACK_SPAWN_X);
+        self.spawner.tick(self.speed, &mut self.obstacles, TRACK_SPAWN_X, self.score);
 
         if check_collision(&self.dino, DINO_X, DINO_WIDTH, DINO_HEIGHT, &self.obstacles) {
             self.game_over = true;
@@ -93,12 +104,20 @@ impl GameState {
             .filter(|obs| obs.x + (obs.width as f32) > DINO_X + 2.0)
             .min_by(|a, b| a.x.partial_cmp(&b.x).unwrap());
 
-        let (mut dist, w, h) = if let Some(obs) = closest {
-            // Distance from Dino's front body (DINO_X + 6.0) to cactus left edge
+        let (mut dist, w, h, obs_type, obs_alt) = if let Some(obs) = closest {
+            // Distance from Dino's front body (DINO_X + 6.0) to obstacle left edge
             let d = (obs.x - (DINO_X + 6.0)).max(0.0);
-            (d, obs.width, obs.height)
+            let (t_str, alt_str) = match obs.obstacle_type {
+                ObstacleType::SmallCactus | ObstacleType::LargeCactus | ObstacleType::Cluster => {
+                    ("cactus", "ground")
+                }
+                ObstacleType::Pterodactyl(FlightAltitude::Low) => ("pterodactyl", "ground"),
+                ObstacleType::Pterodactyl(FlightAltitude::Mid) => ("pterodactyl", "mid"),
+                ObstacleType::Pterodactyl(FlightAltitude::High) => ("pterodactyl", "high"),
+            };
+            (d, obs.width, obs.height, t_str.to_string(), alt_str.to_string())
         } else {
-            (999.0, 0, 0)
+            (999.0, 0, 0, "none".to_string(), "ground".to_string())
         };
 
         if latency_budget_ms > 0.0 && dist < 900.0 {
@@ -112,7 +131,10 @@ impl GameState {
             distance_to_cactus: (dist * 10.0).round() / 10.0,
             cactus_width: w,
             cactus_height: h,
+            obstacle_type: obs_type,
+            obstacle_altitude: obs_alt,
             dino_is_grounded: self.dino.is_grounded,
+            dino_is_ducking: self.dino.is_ducking,
             speed: (self.speed * 100.0).round() / 100.0,
             latency_budget_ms,
         }

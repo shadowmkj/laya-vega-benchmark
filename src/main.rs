@@ -98,6 +98,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 game_state.jump();
                             }
                         }
+                        KeyCode::Down | KeyCode::Char('s') => {
+                            if !game_state.game_over && agent_mgr.driver == DriverMode::Human {
+                                game_state.duck();
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -110,6 +115,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if let Some(action) = agent_mgr.update(&game_state) {
                 if action == "JUMP" {
                     game_state.jump();
+                } else if action == "DUCK" {
+                    game_state.duck();
                 }
             }
 
