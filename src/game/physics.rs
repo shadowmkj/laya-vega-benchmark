@@ -11,7 +11,7 @@ impl Dino {
     // Graceful, floaty Chrome Dino jump with ~19 frames of airtime
     pub const JUMP_VELOCITY: f32 = 2.1;
     pub const GRAVITY: f32 = -0.22;
-    pub const DEFAULT_DUCK_TICKS: u16 = 16; // ~0.5s duck duration
+    pub const DEFAULT_DUCK_TICKS: u16 = 24; // ~0.8s duck duration for smooth terminal repeat
 
     pub fn new() -> Self {
         Self {

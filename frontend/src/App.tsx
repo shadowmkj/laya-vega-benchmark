@@ -151,20 +151,20 @@ export const App: React.FC = () => {
 					if (engine.state.isGrounded && currentObsId && !jumpedObstaclesRef.current.has(currentObsId)) {
 						if (currentRound === 'raw_async') {
 							jumpedObstaclesRef.current.add(currentObsId);
-							engine.duck();
+							engine.duck(true);
 						} else {
 							const elapsed = performance.now() - dispatchTime;
 							const remainingHoldMs = Math.max(0, 45.0 - elapsed);
 
 							if (remainingHoldMs === 0) {
 								jumpedObstaclesRef.current.add(currentObsId);
-								engine.duck();
+								engine.duck(true);
 							} else {
 								if (scheduledTimerRef.current) clearTimeout(scheduledTimerRef.current);
 								scheduledTimerRef.current = window.setTimeout(() => {
 									if (engine.state.isGrounded && currentObsId && !jumpedObstaclesRef.current.has(currentObsId)) {
 										jumpedObstaclesRef.current.add(currentObsId);
-										engine.duck();
+										engine.duck(true);
 									}
 								}, remainingHoldMs);
 							}
@@ -200,7 +200,7 @@ export const App: React.FC = () => {
 			} else if (e.code === 'ArrowDown' || e.key === 's') {
 				e.preventDefault();
 				if (engineRef.current && driverRef.current === 'human' && !engineRef.current.state.gameOver) {
-					engineRef.current.duck();
+					engineRef.current.duck(false); // continuous hold until keyup
 				}
 			} else if (e.key === 'm' || e.key === 'Tab') {
 				e.preventDefault();
@@ -222,11 +222,19 @@ export const App: React.FC = () => {
 			}
 		};
 
+		const handleBlur = () => {
+			if (engineRef.current && driverRef.current === 'human') {
+				engineRef.current.stand();
+			}
+		};
+
 		window.addEventListener('keydown', handleKeyDown);
 		window.addEventListener('keyup', handleKeyUp);
+		window.addEventListener('blur', handleBlur);
 		return () => {
 			window.removeEventListener('keydown', handleKeyDown);
 			window.removeEventListener('keyup', handleKeyUp);
+			window.removeEventListener('blur', handleBlur);
 		};
 	}, []);
 

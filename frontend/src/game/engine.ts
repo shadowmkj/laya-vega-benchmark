@@ -97,15 +97,19 @@ export class GameEngine {
     return false;
   }
 
-  public duck(): boolean {
+  public duck(timed = false): boolean {
     if (this.state.gameOver) return false;
     if (this.state.isGrounded) {
       this.state.isDucking = true;
-      this.duckTicksRemaining = 24; // ~400ms duration
+      this.duckTicksRemaining = timed ? 28 : 0; // 0 means indefinite continuous hold
       return true;
     } else {
       // Fast fall
       this.state.dinoVy += 6.0;
+      if (!timed) {
+        this.state.isDucking = true;
+        this.duckTicksRemaining = 0;
+      }
       return true;
     }
   }
