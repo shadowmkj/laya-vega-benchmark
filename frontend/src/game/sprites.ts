@@ -137,3 +137,94 @@ export function drawGround(
   }
   ctx.restore();
 }
+
+export function drawDuckingDino(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  tick: number,
+  color = '#4ade80'
+) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.translate(x, y);
+
+  const scale = 2.0;
+  ctx.scale(scale, scale);
+
+  // Elongated crouching Dino: ~30px wide x 14px high
+  // 1. Head & Snout (crouched forward)
+  ctx.fillRect(20, 3, 9, 6);
+  ctx.fillRect(22, 9, 7, 3);
+
+  // Eye
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(23, 4, 2, 2);
+  ctx.fillStyle = color;
+
+  // 2. Elongated Neck & Torso
+  ctx.fillRect(6, 6, 16, 6);
+
+  // 3. Low Tail
+  ctx.fillRect(2, 7, 4, 3);
+  ctx.fillRect(0, 8, 2, 2);
+
+  // 4. Low running legs
+  const runFrame = Math.floor(tick / 4) % 2;
+  if (runFrame === 0) {
+    ctx.fillRect(8, 12, 3, 3);
+    ctx.fillRect(14, 12, 3, 2);
+  } else {
+    ctx.fillRect(8, 12, 3, 2);
+    ctx.fillRect(14, 12, 3, 3);
+  }
+
+  ctx.restore();
+}
+
+export function drawPterodactyl(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  tick: number,
+  color = '#38bdf8' // Electric cyan for flying threat
+) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.translate(x, y);
+
+  const scale = 2.0;
+  ctx.scale(scale, scale);
+
+  const wingUp = Math.floor(tick / 5) % 2 === 0;
+
+  // 1. Head and sharp beak
+  ctx.fillRect(16, 5, 5, 4);
+  ctx.fillRect(21, 6, 4, 2); // beak tip
+
+  // Eye
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(18, 6, 1, 1);
+  ctx.fillStyle = color;
+
+  // 2. Torso
+  ctx.fillRect(6, 6, 11, 4);
+  // Tail
+  ctx.fillRect(2, 7, 4, 2);
+
+  // 3. Flapping Wings
+  if (wingUp) {
+    // Wings pointed UP
+    ctx.fillRect(9, 0, 4, 6);
+    ctx.fillRect(8, 1, 6, 2);
+    ctx.fillRect(7, 3, 8, 3);
+  } else {
+    // Wings pointed DOWN
+    ctx.fillRect(9, 10, 4, 6);
+    ctx.fillRect(8, 11, 6, 2);
+    ctx.fillRect(7, 10, 8, 3);
+  }
+
+  ctx.restore();
+}
+

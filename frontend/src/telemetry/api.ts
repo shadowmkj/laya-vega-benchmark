@@ -3,7 +3,7 @@ import { DinoObservation } from '../game/types';
 export interface PredictResponse {
   id: number;
   model: string;
-  action: 'jump' | 'run';
+  action: 'jump' | 'duck' | 'run';
   confidence: number;
   inference_ms: number;
 }

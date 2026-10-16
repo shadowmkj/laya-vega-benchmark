@@ -29,6 +29,7 @@ export const App: React.FC = () => {
 		dinoY: 0,
 		dinoVy: 0,
 		isGrounded: true,
+		isDucking: false,
 		score: 0,
 		highScore: 0,
 		speed: 8.0,
@@ -146,6 +147,29 @@ export const App: React.FC = () => {
 							}
 						}
 					}
+				} else if (resp.action === 'duck') {
+					if (engine.state.isGrounded && currentObsId && !jumpedObstaclesRef.current.has(currentObsId)) {
+						if (currentRound === 'raw_async') {
+							jumpedObstaclesRef.current.add(currentObsId);
+							engine.duck();
+						} else {
+							const elapsed = performance.now() - dispatchTime;
+							const remainingHoldMs = Math.max(0, 45.0 - elapsed);
+
+							if (remainingHoldMs === 0) {
+								jumpedObstaclesRef.current.add(currentObsId);
+								engine.duck();
+							} else {
+								if (scheduledTimerRef.current) clearTimeout(scheduledTimerRef.current);
+								scheduledTimerRef.current = window.setTimeout(() => {
+									if (engine.state.isGrounded && currentObsId && !jumpedObstaclesRef.current.has(currentObsId)) {
+										jumpedObstaclesRef.current.add(currentObsId);
+										engine.duck();
+									}
+								}, remainingHoldMs);
+							}
+						}
+					}
 				}
 			} catch (err) {
 				console.warn('Autopilot inference error:', err);
@@ -173,6 +197,11 @@ export const App: React.FC = () => {
 						engineRef.current.jump();
 					}
 				}
+			} else if (e.code === 'ArrowDown' || e.key === 's') {
+				e.preventDefault();
+				if (engineRef.current && driverRef.current === 'human' && !engineRef.current.state.gameOver) {
+					engineRef.current.duck();
+				}
 			} else if (e.key === 'm' || e.key === 'Tab') {
 				e.preventDefault();
 				setDriver((prev) => (prev === 'human' ? 'laya' : prev === 'laya' ? 'vega' : 'human'));
@@ -185,8 +214,20 @@ export const App: React.FC = () => {
 			}
 		};
 
+		const handleKeyUp = (e: KeyboardEvent) => {
+			if (e.code === 'ArrowDown' || e.key === 's') {
+				if (engineRef.current && driverRef.current === 'human') {
+					engineRef.current.stand();
+				}
+			}
+		};
+
 		window.addEventListener('keydown', handleKeyDown);
-		return () => window.removeEventListener('keydown', handleKeyDown);
+		window.addEventListener('keyup', handleKeyUp);
+		return () => {
+			window.removeEventListener('keydown', handleKeyDown);
+			window.removeEventListener('keyup', handleKeyUp);
+		};
 	}, []);
 
 	return (
@@ -388,7 +429,11 @@ export const App: React.FC = () => {
 							<div className="flex justify-between">
 								<span className="text-zinc-500">Last Action:</span>
 								<span
-									className={`font-bold ${metrics.lastAction === 'JUMP' ? 'text-amber-400' : 'text-emerald-400'
+									className={`font-bold ${metrics.lastAction === 'JUMP'
+										? 'text-amber-400'
+										: metrics.lastAction === 'DUCK'
+											? 'text-cyan-400'
+											: 'text-emerald-400'
 										}`}
 								>
 									{metrics.lastAction}
@@ -413,7 +458,7 @@ export const App: React.FC = () => {
 						</div>
 
 						<div className="pt-2 mt-2 border-t border-zinc-800/60 text-[11px] text-zinc-500 flex justify-between">
-							<span>Keys: [Space] Jump</span>
+							<span>[Space] Jump / [↓/S] Duck</span>
 							<span>[M] Swap Model</span>
 							<span>[H] Toggle Mode</span>
 						</div>
