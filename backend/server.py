@@ -4,16 +4,23 @@ import sys
 import threading
 import time
 from typing import Any, Dict
+import logging
 
 import fastapi
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import logging
 
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 os.environ["HF_HUB_OFFLINE"] = "1"
 # Suppress CUDA-specific fallback warnings on macOS / non-CUDA environments
 logging.getLogger("transformers.integrations.hub_kernels").setLevel(logging.ERROR)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
+logger = logging.getLogger("backend")
 
 app = fastapi.FastAPI(title="Dino Decision Brain Server")
 
@@ -28,6 +35,17 @@ app.add_middleware(
 model_lock = threading.Lock()
 laya_model = None
 vega_model = None
+
+
+@app.on_event("startup")
+def on_startup():
+    import torch
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    logger.info("FastAPI Decision Backend initialized. PyTorch compute target: %s", device)
+    logger.info("Model status: Laya=%s, Vega=%s (lazy-loaded on first request)", 
+                "Loaded" if laya_model else "Standby",
+                "Loaded" if vega_model else "Standby")
+
 
 LAYA_QUESTION = {
     "action": {
@@ -57,22 +75,28 @@ VEGA_QUESTION = {
 def get_laya():
     global laya_model
     if laya_model is None:
-        import laya
         import torch
         device = "cuda" if torch.cuda.is_available() else "cpu"
+        logger.info("[*] Loading Laya model ('convaiinnovations/laya') on compute device: %s...", device)
+        t_start = time.perf_counter()
+        import laya
         laya_model = laya.load("convaiinnovations/laya", device=device)
+        logger.info("[+] Laya model loaded successfully in %.2fs on %s", time.perf_counter() - t_start, device)
     return laya_model
 
 
 def get_vega():
     global vega_model
     if vega_model is None:
-        import vegaml
         import torch
         # On Apple Silicon without CUDA, CPU runs the PyTorch chunked delta rule kernels
         # ~5.4x faster than MPS (12s vs 67s) due to vector SIMD cache locality.
         device = "cuda" if torch.cuda.is_available() else "cpu"
+        logger.info("[*] Loading Vega model on compute device: %s...", device)
+        t_start = time.perf_counter()
+        import vegaml
         vega_model = vegaml.load(device=device)
+        logger.info("[+] Vega model loaded successfully in %.2fs on %s", time.perf_counter() - t_start, device)
     return vega_model
 
 
@@ -84,7 +108,14 @@ class PredictRequest(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "models": ["laya", "vega"]}
+    return {
+        "status": "ok",
+        "models": ["laya", "vega"],
+        "loaded": {
+            "laya": laya_model is not None,
+            "vega": vega_model is not None,
+        },
+    }
 
 
 @app.post("/predict")
@@ -112,6 +143,11 @@ def predict(req: PredictRequest):
                 status = "danger ground obstacle: jump required"
         else:
             status = "distant"
+
+        logger.debug(
+            "Predict req #%s [%s]: obs=%s alt=%s dist=%.1f grounded=%s budget=%.0fms",
+            req.id, model_name, obs_type, altitude, dist, grounded, budget
+        )
 
         if model_name == "vega":
             v = get_vega()
@@ -141,6 +177,11 @@ def predict(req: PredictRequest):
             conf = float(ans.get("answer_confidence", ans.get("confidence", 0.9)))
 
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
+
+    logger.info(
+        "Decision #%s [%s]: action=%s (%.1f%%) in %.1fms [obs=%s @ %.1f cells]",
+        req.id, model_name.upper(), action.upper(), conf * 100.0, elapsed_ms, obs_type, dist
+    )
 
     return {
         "id": req.id,

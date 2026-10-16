@@ -44,21 +44,33 @@ VEGA_QUESTION = {
 }
 
 
+def log_worker(msg: str):
+    sys.stderr.write(f"[{time.strftime('%H:%M:%S')}] [worker] {msg}\n")
+    sys.stderr.flush()
+
+
 def get_laya():
     global laya_model
     if laya_model is None:
+        log_worker("[*] Loading Laya model ('convaiinnovations/laya')...")
+        t0 = time.perf_counter()
         import laya
         laya_model = laya.load("convaiinnovations/laya")
+        log_worker(f"[+] Laya model loaded successfully in {time.perf_counter() - t0:.2f}s")
     return laya_model
 
 
 def get_vega():
     global vega_model
     if vega_model is None:
-        import vegaml
         import torch
-        device = "mps" if torch.backends.mps.is_available() else "cpu"
+        # On Apple Silicon without CUDA, CPU runs chunked delta rule kernels much faster than MPS
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        log_worker(f"[*] Loading Vega model on compute device: {device}...")
+        t0 = time.perf_counter()
+        import vegaml
         vega_model = vegaml.load(device=device)
+        log_worker(f"[+] Vega model loaded successfully in {time.perf_counter() - t0:.2f}s on {device}")
     return vega_model
 
 
