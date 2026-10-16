@@ -1,7 +1,31 @@
+export interface MoveOptionProbabilities {
+  jump: number;
+  duck: number;
+  run: number;
+}
+
+export interface MoveHistoryItem {
+  id: string;
+  timestamp: number;
+  timeString: string;
+  driver: 'laya' | 'vega' | 'human';
+  fromAction: string;
+  action: 'JUMP' | 'DUCK' | 'RUN';
+  confidence: number;
+  probabilities: MoveOptionProbabilities;
+  obstacleType: string;
+  obstacleAltitude: string;
+  distance: number;
+  serverLatencyMs: number;
+  roundTripMs: number;
+}
+
 export interface TelemetryMetrics {
   lastLatencyMs: number;
+  lastRttMs?: number;
   lastConfidence: number;
   lastAction: string;
+  lastProbabilities?: MoveOptionProbabilities;
   p50: number;
   p90: number;
   p99: number;
@@ -14,13 +38,25 @@ export class TelemetryTracker {
   private samples: number[] = [];
   public deadlineMisses = 0;
   public lastLatencyMs = 0;
+  public lastRttMs = 0;
   public lastConfidence = 0;
   public lastAction = 'RUN';
+  public lastProbabilities?: MoveOptionProbabilities;
 
-  public record(latencyMs: number, confidence: number, action: string) {
+  public record(
+    latencyMs: number,
+    confidence: number,
+    action: string,
+    probabilities?: MoveOptionProbabilities,
+    rttMs?: number
+  ) {
     this.lastLatencyMs = latencyMs;
+    this.lastRttMs = rttMs ?? latencyMs;
     this.lastConfidence = confidence;
     this.lastAction = action.toUpperCase();
+    if (probabilities) {
+      this.lastProbabilities = probabilities;
+    }
 
     this.samples.push(latencyMs);
     if (this.samples.length > 500) {
@@ -35,8 +71,10 @@ export class TelemetryTracker {
   public getMetrics(): TelemetryMetrics {
     return {
       lastLatencyMs: this.lastLatencyMs,
+      lastRttMs: this.lastRttMs,
       lastConfidence: this.lastConfidence,
       lastAction: this.lastAction,
+      lastProbabilities: this.lastProbabilities,
       p50: this.percentile(0.50),
       p90: this.percentile(0.90),
       p99: this.percentile(0.99),

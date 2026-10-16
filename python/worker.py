@@ -85,20 +85,9 @@ def decide_laya(state: dict) -> tuple[str, float]:
     obs_type = str(state.get("obstacle_type", "cactus")).lower()
     altitude = str(state.get("obstacle_altitude", "ground")).lower()
 
-    if dist <= 7.5 and dist > 0:
-        if obs_type == "pterodactyl" and altitude == "mid":
-            status = "danger head-level bird: duck required"
-        elif altitude == "high":
-            status = "safe overhead bird: run"
-        else:
-            status = "danger ground obstacle: jump required"
-    else:
-        status = "distant"
-
     formatted_state = {
         "obstacle": f"{obs_type} ({altitude})",
         "distance": f"{dist:.1f} cells",
-        "status": status,
         "grounded": "yes" if grounded else "no",
         "ducking": "yes" if ducking else "no",
         "speed": f"{speed:.2f}",
@@ -111,10 +100,20 @@ def decide_laya(state: dict) -> tuple[str, float]:
     ans = res.get("answers", {}).get("action", {})
     action = ans.get("choice", "run")
     confidence = float(ans.get("answer_confidence", ans.get("confidence", 0.9)))
-    return action, confidence
+    raw_probs = ans.get("probabilities", {})
+    probabilities = {"jump": 0.0, "duck": 0.0, "run": 0.0}
+    for k, v in raw_probs.items():
+        probabilities[str(k).lower()] = round(float(v), 4)
+    if sum(probabilities.values()) == 0.0:
+        probabilities[action.lower()] = round(confidence, 4)
+        rem = round((1.0 - confidence) / 2.0, 4) if confidence < 1.0 else 0.0
+        for k in probabilities:
+            if k != action.lower():
+                probabilities[k] = max(0.0, rem)
+    return action, confidence, probabilities
 
 
-def decide_vega(state: dict) -> tuple[str, float]:
+def decide_vega(state: dict) -> tuple[str, float, dict]:
     model = get_vega()
     dist = float(state.get("distance_to_cactus", state.get("distance_to_obstacle", 999.0)))
     width = state.get("cactus_width", 2)
@@ -125,26 +124,26 @@ def decide_vega(state: dict) -> tuple[str, float]:
     obs_type = str(state.get("obstacle_type", "cactus")).lower()
     altitude = str(state.get("obstacle_altitude", "ground")).lower()
 
-    if dist <= 7.5 and dist > 0:
-        if obs_type == "pterodactyl" and altitude == "mid":
-            status = "danger head-level bird: duck required"
-        elif altitude == "high":
-            status = "safe overhead bird: run"
-        else:
-            status = "danger ground obstacle: jump required"
-    else:
-        status = "distant"
-
     formatted_state = (
         f"Obstacle: {obs_type} at altitude {altitude}. Distance: {dist:.1f} cells. "
-        f"Status: {status}. Width: {width}. Speed: {speed:.2f}. "
-        f"Grounded: {grounded}. Ducking: {ducking}. Latency budget: {budget:.0f}ms."
+        f"Grounded: {'yes' if grounded else 'no'}. Ducking: {'yes' if ducking else 'no'}. "
+        f"Width: {width}. Speed: {speed:.2f}. Latency budget: {budget:.0f}ms."
     )
     res = model.decide(formatted_state, VEGA_QUESTION)
     ans = res.get("answers", {}).get("action", {})
     action = ans.get("choice", "run")
     confidence = float(ans.get("confidence", 0.9))
-    return action, confidence
+    raw_probs = ans.get("probs", {})
+    probabilities = {"jump": 0.0, "duck": 0.0, "run": 0.0}
+    for k, v in raw_probs.items():
+        probabilities[str(k).lower()] = round(float(v), 4)
+    if sum(probabilities.values()) == 0.0:
+        probabilities[action.lower()] = round(confidence, 4)
+        rem = round((1.0 - confidence) / 2.0, 4) if confidence < 1.0 else 0.0
+        for k in probabilities:
+            if k != action.lower():
+                probabilities[k] = max(0.0, rem)
+    return action, confidence, probabilities
 
 
 def main():
@@ -165,9 +164,9 @@ def main():
 
             t0 = time.perf_counter()
             if model_name == "vega":
-                action, conf = decide_vega(state)
+                action, conf, probs = decide_vega(state)
             else:
-                action, conf = decide_laya(state)
+                action, conf, probs = decide_laya(state)
             elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
             resp = {
@@ -175,6 +174,7 @@ def main():
                 "model": model_name,
                 "action": action.lower(),
                 "confidence": conf,
+                "probabilities": probs,
                 "inference_ms": round(elapsed_ms, 2),
             }
             sys.stdout.write(json.dumps(resp) + "\n")
@@ -185,6 +185,7 @@ def main():
                 "error": str(e),
                 "action": "run",
                 "confidence": 0.0,
+                "probabilities": {"jump": 0.0, "duck": 0.0, "run": 1.0},
                 "inference_ms": 0.0,
             }
             sys.stdout.write(json.dumps(err_resp) + "\n")

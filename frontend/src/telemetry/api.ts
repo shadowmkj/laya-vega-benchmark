@@ -5,6 +5,7 @@ export interface PredictResponse {
   model: string;
   action: 'jump' | 'duck' | 'run';
   confidence: number;
+  probabilities?: Record<'jump' | 'duck' | 'run' | string, number>;
   inference_ms: number;
 }
 

@@ -2,7 +2,7 @@
 name = "layadino"
 version = "0.1.0"
 description = "Chrome Dino Typed Decision Model Benchmark for Laya and Vega"
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.115.0",
     "uvicorn>=0.30.0",
