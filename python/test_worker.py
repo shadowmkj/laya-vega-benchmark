@@ -39,7 +39,7 @@ def test_worker_pipe():
     resp_laya = json.loads(proc.stdout.readline())
     print(f"Laya response: {resp_laya}")
     assert resp_laya["id"] == 1
-    assert resp_laya["action"] in ["jump", "run"]
+    assert resp_laya["action"] in ["jump", "duck", "run"]
 
     # 3. Test Vega
     print("Testing Vega inference...")
@@ -50,7 +50,10 @@ def test_worker_pipe():
             "distance_to_cactus": 8.0,
             "cactus_width": 2,
             "cactus_height": 2,
+            "obstacle_type": "cactus",
+            "obstacle_altitude": "ground",
             "dino_is_grounded": True,
+            "dino_is_ducking": False,
             "speed": 1.0,
             "latency_budget_ms": 45.0,
         },
@@ -60,14 +63,28 @@ def test_worker_pipe():
     resp_vega = json.loads(proc.stdout.readline())
     print(f"Vega response: {resp_vega}")
     assert resp_vega["id"] == 2
-    assert resp_vega["action"] in ["jump", "run"]
+    assert resp_vega["action"] in ["jump", "duck", "run"]
 
-    # 4. Second Vega inference (warm)
-    proc.stdin.write(json.dumps(req_vega) + "\n")
+    # 4. Test Pterodactyl duck inference
+    req_bird = {
+        "id": 3,
+        "model": "laya",
+        "state": {
+            "distance_to_cactus": 5.0,
+            "obstacle_type": "pterodactyl",
+            "obstacle_altitude": "mid",
+            "dino_is_grounded": True,
+            "dino_is_ducking": False,
+            "speed": 1.0,
+            "latency_budget_ms": 0.0,
+        },
+    }
+    proc.stdin.write(json.dumps(req_bird) + "\n")
     proc.stdin.flush()
-    resp_vega_warm = json.loads(proc.stdout.readline())
-    print(f"Vega warm response: {resp_vega_warm}")
-    print(f"Vega warm latency: {resp_vega_warm['inference_ms']}ms")
+    resp_bird = json.loads(proc.stdout.readline())
+    print(f"Pterodactyl response: {resp_bird}")
+    assert resp_bird["id"] == 3
+    assert resp_bird["action"] in ["jump", "duck", "run"]
 
     proc.terminate()
     print("Worker test for BOTH Laya and Vega PASSED successfully!")

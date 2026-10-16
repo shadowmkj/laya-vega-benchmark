@@ -22,10 +22,11 @@ vega_model = None
 LAYA_QUESTION = {
     "action": {
         "type": "choice",
-        "instructions": "Chrome Dino game. Pick JUMP or RUN to avoid crashing into cactus.",
+        "instructions": "Chrome Dino game. Pick JUMP, DUCK, or RUN to avoid crashing into obstacles.",
         "criteria": {
-            "jump": "Approaching cactus within jump trigger distance and Dino is grounded. Leap now.",
-            "run": "Runway is clear, cactus is far, or Dino is already in the air.",
+            "jump": "Ground obstacle (cactus or low bird) approaching ahead. Leap over it.",
+            "duck": "Mid-height flying bird approaching at head level. Duck underneath it.",
+            "run": "Runway is clear, obstacle is far away, or high bird will pass overhead safely.",
         },
     }
 }
@@ -33,10 +34,11 @@ LAYA_QUESTION = {
 VEGA_QUESTION = {
     "action": {
         "type": "choice",
-        "instructions": "Avoid cactus obstacle in Chrome Dino.",
+        "instructions": "Avoid obstacles in Chrome Dino by jumping, ducking, or running.",
         "criteria": {
-            "jump": "Cactus is close and Dino must jump to avoid collision.",
-            "run": "Runway is clear or obstacle is far away.",
+            "jump": "Ground obstacle (cactus or low bird) is close and Dino must jump.",
+            "duck": "Flying bird at head height is close and Dino must duck underneath.",
+            "run": "Runway is clear, obstacle is far away, or high bird will clear overhead.",
         },
     }
 }
@@ -62,19 +64,37 @@ def get_vega():
 
 def decide_laya(state: dict) -> tuple[str, float]:
     model = get_laya()
-    dist = state.get("distance_to_cactus", 999.0)
-    grounded = state.get("dino_is_grounded", True)
-    speed = state.get("speed", 1.0)
+    dist = float(state.get("distance_to_cactus", state.get("distance_to_obstacle", 999.0)))
+    grounded = bool(state.get("dino_is_grounded", True))
+    ducking = bool(state.get("dino_is_ducking", False))
+    speed = float(state.get("speed", 1.0))
     width = state.get("cactus_width", 2)
-    budget = state.get("latency_budget_ms", 0.0)
+    budget = float(state.get("latency_budget_ms", 0.0))
+    obs_type = str(state.get("obstacle_type", "cactus")).lower()
+    altitude = str(state.get("obstacle_altitude", "ground")).lower()
+
+    if dist <= 7.5 and dist > 0:
+        if obs_type == "pterodactyl" and altitude == "mid":
+            status = "danger head-level bird: duck required"
+        elif altitude == "high":
+            status = "safe overhead bird: run"
+        else:
+            status = "danger ground obstacle: jump required"
+    else:
+        status = "distant"
 
     formatted_state = {
-        "cactus_dist": f"{dist:.1f} cells",
+        "obstacle": f"{obs_type} ({altitude})",
+        "distance": f"{dist:.1f} cells",
+        "status": status,
         "grounded": "yes" if grounded else "no",
+        "ducking": "yes" if ducking else "no",
         "speed": f"{speed:.2f}",
         "width": width,
-        "latency_budget": f"{budget:.0f}ms",
     }
+    if budget > 0:
+        formatted_state["latency_budget"] = f"{budget:.0f}ms"
+
     res = model.predict(state=formatted_state, questions=LAYA_QUESTION)
     ans = res.get("answers", {}).get("action", {})
     action = ans.get("choice", "run")
@@ -84,16 +104,29 @@ def decide_laya(state: dict) -> tuple[str, float]:
 
 def decide_vega(state: dict) -> tuple[str, float]:
     model = get_vega()
-    dist = state.get("distance_to_cactus", 999.0)
+    dist = float(state.get("distance_to_cactus", state.get("distance_to_obstacle", 999.0)))
     width = state.get("cactus_width", 2)
-    grounded = state.get("dino_is_grounded", True)
-    speed = state.get("speed", 1.0)
-    budget = state.get("latency_budget_ms", 0.0)
+    grounded = bool(state.get("dino_is_grounded", True))
+    ducking = bool(state.get("dino_is_ducking", False))
+    speed = float(state.get("speed", 1.0))
+    budget = float(state.get("latency_budget_ms", 0.0))
+    obs_type = str(state.get("obstacle_type", "cactus")).lower()
+    altitude = str(state.get("obstacle_altitude", "ground")).lower()
+
+    if dist <= 7.5 and dist > 0:
+        if obs_type == "pterodactyl" and altitude == "mid":
+            status = "danger head-level bird: duck required"
+        elif altitude == "high":
+            status = "safe overhead bird: run"
+        else:
+            status = "danger ground obstacle: jump required"
+    else:
+        status = "distant"
 
     formatted_state = (
-        f"Dino approaching cactus at distance {dist:.1f} cells. "
-        f"Cactus width: {width}. Speed: {speed:.2f}. "
-        f"Grounded: {grounded}. Latency budget: {budget:.0f}ms."
+        f"Obstacle: {obs_type} at altitude {altitude}. Distance: {dist:.1f} cells. "
+        f"Status: {status}. Width: {width}. Speed: {speed:.2f}. "
+        f"Grounded: {grounded}. Ducking: {ducking}. Latency budget: {budget:.0f}ms."
     )
     res = model.decide(formatted_state, VEGA_QUESTION)
     ans = res.get("answers", {}).get("action", {})
