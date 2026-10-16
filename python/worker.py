@@ -49,14 +49,62 @@ def log_worker(msg: str):
     sys.stderr.flush()
 
 
+def log_model_memory_loaded(model_name: str, device: str, elapsed_s: float):
+    import torch
+
+    mem_lines = []
+    if torch.cuda.is_available() and "cuda" in str(device).lower():
+        alloc_mb = torch.cuda.memory_allocated() / (1024 * 1024)
+        res_mb = torch.cuda.memory_reserved() / (1024 * 1024)
+        try:
+            dev_name = torch.cuda.get_device_name(0)
+            total_vram_mb = torch.cuda.get_device_properties(0).total_memory / (1024 * 1024)
+            pct = (alloc_mb / total_vram_mb * 100) if total_vram_mb > 0 else 0
+            mem_lines.append(f"  • Compute Device:    {device} ({dev_name})")
+            mem_lines.append(f"  • VRAM Allocated:    {alloc_mb:,.1f} MB / {total_vram_mb:,.1f} MB ({pct:.1f}%)")
+            mem_lines.append(f"  • VRAM Reserved:     {res_mb:,.1f} MB")
+        except Exception:
+            mem_lines.append(f"  • Compute Device:    {device}")
+            mem_lines.append(f"  • VRAM Allocated:    {alloc_mb:,.1f} MB (Reserved: {res_mb:,.1f} MB)")
+    else:
+        mem_lines.append(f"  • Compute Device:    {device}")
+
+    try:
+        import psutil
+
+        rss_mb = psutil.Process().memory_info().rss / (1024 * 1024)
+        mem_lines.append(f"  • Process RAM (RSS): {rss_mb:,.1f} MB")
+    except Exception:
+        pass
+
+    banner = [
+        "",
+        "================================================================================",
+        f" [✓] MODEL LOADED TO MEMORY: {model_name.upper()} (0.8B)",
+        *mem_lines,
+        f"  • Load Duration:     {elapsed_s:.2f} seconds",
+        f"  • Status:            ONLINE & READY FOR INFERENCE",
+        "================================================================================",
+        "",
+    ]
+    banner_text = "\n".join(banner)
+    sys.stderr.write(banner_text + "\n")
+    sys.stderr.flush()
+
+
 def get_laya():
     global laya_model
     if laya_model is None:
-        log_worker("[*] Loading Laya model ('convaiinnovations/laya')...")
+        import torch
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        log_worker(f"[*] Loading Laya model ('convaiinnovations/laya') on compute device: {device}...")
         t0 = time.perf_counter()
         import laya
-        laya_model = laya.load("convaiinnovations/laya")
-        log_worker(f"[+] Laya model loaded successfully in {time.perf_counter() - t0:.2f}s")
+
+        laya_model = laya.load("convaiinnovations/laya", device=device)
+        elapsed = time.perf_counter() - t0
+        log_model_memory_loaded("convaiinnovations/laya", device, elapsed)
     return laya_model
 
 
@@ -64,13 +112,16 @@ def get_vega():
     global vega_model
     if vega_model is None:
         import torch
+
         # On Apple Silicon without CUDA, CPU runs chunked delta rule kernels much faster than MPS
         device = "cuda" if torch.cuda.is_available() else "cpu"
         log_worker(f"[*] Loading Vega model on compute device: {device}...")
         t0 = time.perf_counter()
         import vegaml
+
         vega_model = vegaml.load(device=device)
-        log_worker(f"[+] Vega model loaded successfully in {time.perf_counter() - t0:.2f}s on {device}")
+        elapsed = time.perf_counter() - t0
+        log_model_memory_loaded("vegaml", device, elapsed)
     return vega_model
 
 

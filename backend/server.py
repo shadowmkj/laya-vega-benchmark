@@ -19,6 +19,12 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("backend")
+logger.setLevel(logging.INFO)
+if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
+    sh = logging.StreamHandler(sys.stdout)
+    sh.setLevel(logging.INFO)
+    sh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S"))
+    logger.addHandler(sh)
 
 app = fastapi.FastAPI(title="Dino Decision Brain Server")
 
@@ -35,6 +41,51 @@ laya_model = None
 vega_model = None
 
 
+def log_model_memory_loaded(model_name: str, device: str, elapsed_s: float):
+    import torch
+
+    mem_lines = []
+    if torch.cuda.is_available() and "cuda" in str(device).lower():
+        alloc_mb = torch.cuda.memory_allocated() / (1024 * 1024)
+        res_mb = torch.cuda.memory_reserved() / (1024 * 1024)
+        try:
+            dev_name = torch.cuda.get_device_name(0)
+            total_vram_mb = torch.cuda.get_device_properties(0).total_memory / (1024 * 1024)
+            pct = (alloc_mb / total_vram_mb * 100) if total_vram_mb > 0 else 0
+            mem_lines.append(f"  • Compute Device:    {device} ({dev_name})")
+            mem_lines.append(f"  • VRAM Allocated:    {alloc_mb:,.1f} MB / {total_vram_mb:,.1f} MB ({pct:.1f}%)")
+            mem_lines.append(f"  • VRAM Reserved:     {res_mb:,.1f} MB")
+        except Exception:
+            mem_lines.append(f"  • Compute Device:    {device}")
+            mem_lines.append(f"  • VRAM Allocated:    {alloc_mb:,.1f} MB (Reserved: {res_mb:,.1f} MB)")
+    else:
+        mem_lines.append(f"  • Compute Device:    {device}")
+
+    try:
+        import psutil
+
+        rss_mb = psutil.Process().memory_info().rss / (1024 * 1024)
+        mem_lines.append(f"  • Process RAM (RSS): {rss_mb:,.1f} MB")
+    except Exception:
+        pass
+
+    banner = [
+        "",
+        "================================================================================",
+        f" [✓] MODEL LOADED TO MEMORY: {model_name.upper()} (0.8B)",
+        *mem_lines,
+        f"  • Load Duration:     {elapsed_s:.2f} seconds",
+        f"  • Status:            ONLINE & READY FOR INFERENCE",
+        "================================================================================",
+        "",
+    ]
+    banner_text = "\n".join(banner)
+    logger.info(banner_text)
+    # Direct write to stdout ensures instant terminal display without stream buffering
+    sys.stdout.write(banner_text + "\n")
+    sys.stdout.flush()
+
+
 @app.on_event("startup")
 def on_startup():
     import torch
@@ -44,10 +95,23 @@ def on_startup():
         "FastAPI Decision Backend initialized. PyTorch compute target: %s", device
     )
     logger.info(
-        "Model status: Laya=%s, Vega=%s (lazy-loaded on first request)",
+        "Model status: Laya=%s, Vega=%s",
         "Loaded" if laya_model else "Standby",
         "Loaded" if vega_model else "Standby",
     )
+
+    # Optional immediate pre-load to memory on startup via PRELOAD_MODEL env
+    preload = os.getenv("PRELOAD_MODEL", "").strip().lower()
+    if preload in ("1", "true", "laya"):
+        logger.info("[*] Pre-loading Laya model to memory on startup (PRELOAD_MODEL set)...")
+        get_laya()
+    elif preload == "vega":
+        logger.info("[*] Pre-loading Vega model to memory on startup (PRELOAD_MODEL set)...")
+        get_vega()
+    elif preload in ("all", "both"):
+        logger.info("[*] Pre-loading all models to memory on startup (PRELOAD_MODEL set)...")
+        get_laya()
+        get_vega()
 
 
 LAYA_QUESTION = {
@@ -89,11 +153,8 @@ def get_laya():
         import laya
 
         laya_model = laya.load("convaiinnovations/laya", device=device)
-        logger.info(
-            "[+] Laya model loaded successfully in %.2fs on %s",
-            time.perf_counter() - t_start,
-            device,
-        )
+        elapsed = time.perf_counter() - t_start
+        log_model_memory_loaded("convaiinnovations/laya", device, elapsed)
     return laya_model
 
 
@@ -111,11 +172,8 @@ def get_vega():
         import vegaml
 
         vega_model = vegaml.load(device=device)
-        logger.info(
-            "[+] Vega model loaded successfully in %.2fs on %s",
-            time.perf_counter() - t_start,
-            device,
-        )
+        elapsed = time.perf_counter() - t_start
+        log_model_memory_loaded("vegaml", device, elapsed)
     return vega_model
 
 
