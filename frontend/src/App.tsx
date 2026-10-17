@@ -217,7 +217,11 @@ export const App: React.FC = () => {
 						}
 					}
 				} else if (resp.action === 'run') {
-					if (engine.state.isDucking) {
+					if (currentObsId) {
+						jumpedObstaclesRef.current.add(currentObsId);
+					}
+					// Only stand up if duck was not initiated as a timed maneuver
+					if (engine.state.isDucking && !engine.isTimedDucking()) {
 						engine.stand();
 					}
 				}

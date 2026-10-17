@@ -97,11 +97,13 @@ export class GameEngine {
     return false;
   }
 
-  public duck(timed = false): boolean {
+  public duck(timed = false, ticks?: number): boolean {
     if (this.state.gameOver) return false;
+    // Base clearing duration: at 6.0 px/frame, ~300px clearance takes ~50 frames (0.83s)
+    const duration = ticks ?? Math.max(48, Math.ceil(300 / this.state.speed));
     if (this.state.isGrounded) {
       this.state.isDucking = true;
-      this.duckTicksRemaining = timed ? 28 : 0; // 0 means indefinite continuous hold
+      this.duckTicksRemaining = timed ? duration : 0; // 0 means indefinite continuous hold
       return true;
     } else {
       // Fast fall
@@ -112,6 +114,10 @@ export class GameEngine {
       }
       return true;
     }
+  }
+
+  public isTimedDucking(): boolean {
+    return this.state.isDucking && this.duckTicksRemaining > 0;
   }
 
   public stand() {
@@ -186,8 +192,21 @@ export class GameEngine {
     if (this.duckTicksRemaining > 0) {
       this.duckTicksRemaining -= dt;
       if (this.duckTicksRemaining <= 0) {
-        this.state.isDucking = false;
-        this.duckTicksRemaining = 0;
+        // Safety clearance: do not stand up if any mid-height pterodactyl is still overhead
+        const dangerOverhead = this.state.obstacles.some(
+          (obs) =>
+            obs.type === 'pterodactyl' &&
+            obs.altitude === 'mid' &&
+            obs.x < this.dinoX + 48 &&
+            obs.x + obs.width > this.dinoX + 2
+        );
+        if (!dangerOverhead) {
+          this.state.isDucking = false;
+          this.duckTicksRemaining = 0;
+        } else {
+          // Delay standing up until the obstacle has completely passed overhead
+          this.duckTicksRemaining = 4;
+        }
       }
     }
 

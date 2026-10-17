@@ -136,11 +136,11 @@ def on_startup():
 LAYA_QUESTION = {
     "action": {
         "type": "choice",
-        "instructions": "Determine the required action to avoid the oncoming obstacle.",
+        "instructions": "Survival maneuver for running dinosaur to avoid oncoming hazard.",
         "criteria": {
-            "jump": "Jump over a ground obstacle (cactus or low-flying pterodactyl).",
-            "duck": "Duck underneath a head-height obstacle (mid-level flying pterodactyl).",
-            "run": "Run forward safely (high-flying pterodactyl overhead, or clear path).",
+            "jump": "Ground-level hazard on the track (cactus or low bird). Leap into the air.",
+            "duck": "Mid-height hazard approaching at head level (flying bird). Duck down beneath it.",
+            "run": "Overhead hazard flying high above, or clear distant track. Keep running forward.",
         },
     }
 }
@@ -148,11 +148,11 @@ LAYA_QUESTION = {
 VEGA_QUESTION = {
     "action": {
         "type": "choice",
-        "instructions": "Determine the required action to avoid the oncoming obstacle.",
+        "instructions": "Survival maneuver for running dinosaur to avoid oncoming hazard.",
         "criteria": {
-            "jump": "Jump over a ground obstacle (cactus or low-flying pterodactyl).",
-            "duck": "Duck underneath a head-height obstacle (mid-level flying pterodactyl).",
-            "run": "Run forward safely (high-flying pterodactyl overhead, or clear path).",
+            "jump": "Ground-level hazard on the track (cactus or low bird). Leap into the air.",
+            "duck": "Mid-height hazard approaching at head level (flying bird). Duck down beneath it.",
+            "run": "Overhead hazard flying high above, or clear distant track. Keep running forward.",
         },
     }
 }
@@ -242,46 +242,42 @@ def predict(req: PredictRequest):
             budget,
         )
 
-        status_text = "on ground" if grounded else "airborne"
+        status_text = "running on ground" if grounded else "airborne"
 
         if dist > 8.5 or dist <= 0:
             formatted_state = {
-                "obstacle": "distant obstacle / clear track",
-                "obstacle_height": "safe distance ahead",
-                "action": "run forward safely",
-                "status": status_text,
+                "track_condition": "path ahead is clear",
+                "nearest_hazard": "distant in background",
+                "distance": f"{dist:.1f} cells ahead",
+                "dino_posture": status_text,
             }
         elif obs_type == "cactus":
             formatted_state = {
-                "obstacle": "ground cactus",
-                "obstacle_height": "ground level obstacle",
-                "action": "jump over ground obstacle",
+                "track_condition": "ground obstacle ahead",
+                "nearest_hazard": "ground-level cactus",
                 "distance": f"{dist:.1f} cells ahead",
-                "status": status_text,
+                "dino_posture": status_text,
             }
         elif obs_type == "pterodactyl" and altitude == "mid":
             formatted_state = {
-                "obstacle": "mid-level flying pterodactyl",
-                "obstacle_height": "head level obstacle",
-                "action": "duck underneath obstacle",
+                "track_condition": "head-level obstacle ahead",
+                "nearest_hazard": "flying bird approaching at head level",
                 "distance": f"{dist:.1f} cells ahead",
-                "status": status_text,
+                "dino_posture": status_text,
             }
         elif obs_type == "pterodactyl" and altitude == "high":
             formatted_state = {
-                "obstacle": "high-flying pterodactyl",
-                "obstacle_height": "high overhead obstacle",
-                "action": "run forward safely",
+                "track_condition": "high overhead obstacle",
+                "nearest_hazard": "flying bird high above Dino head",
                 "distance": f"{dist:.1f} cells ahead",
-                "status": status_text,
+                "dino_posture": status_text,
             }
         else:  # low pterodactyl or unknown ground hazard
             formatted_state = {
-                "obstacle": "low-flying pterodactyl",
-                "obstacle_height": "ground level obstacle",
-                "action": "jump over ground obstacle",
+                "track_condition": "ground obstacle ahead",
+                "nearest_hazard": "ground-skimming low bird",
                 "distance": f"{dist:.1f} cells ahead",
-                "status": status_text,
+                "dino_posture": status_text,
             }
 
         if budget > 0:
