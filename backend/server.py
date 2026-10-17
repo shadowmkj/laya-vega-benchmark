@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import threading
 import time
 from typing import Any
@@ -23,7 +24,11 @@ logger.setLevel(logging.INFO)
 if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
     sh = logging.StreamHandler(sys.stdout)
     sh.setLevel(logging.INFO)
-    sh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S"))
+    sh.setFormatter(
+        logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S"
+        )
+    )
     logger.addHandler(sh)
 
 app = fastapi.FastAPI(title="Dino Decision Brain Server")
@@ -50,14 +55,22 @@ def log_model_memory_loaded(model_name: str, device: str, elapsed_s: float):
         res_mb = torch.cuda.memory_reserved() / (1024 * 1024)
         try:
             dev_name = torch.cuda.get_device_name(0)
-            total_vram_mb = torch.cuda.get_device_properties(0).total_memory / (1024 * 1024)
+            total_vram_mb = torch.cuda.get_device_properties(0).total_memory / (
+                1024 * 1024
+            )
             pct = (alloc_mb / total_vram_mb * 100) if total_vram_mb > 0 else 0
             mem_lines.append(f"  • Compute Device:    {device} ({dev_name})")
-            mem_lines.append(f"  • VRAM Allocated:    {alloc_mb:,.1f} MB / {total_vram_mb:,.1f} MB ({pct:.1f}%)")
+            mem_lines.append(
+                f"  • VRAM Allocated:    {alloc_mb:,.1f} MB / {total_vram_mb:,.1f} MB ({
+                    pct:.1f}%)"
+            )
             mem_lines.append(f"  • VRAM Reserved:     {res_mb:,.1f} MB")
         except Exception:
             mem_lines.append(f"  • Compute Device:    {device}")
-            mem_lines.append(f"  • VRAM Allocated:    {alloc_mb:,.1f} MB (Reserved: {res_mb:,.1f} MB)")
+            mem_lines.append(
+                f"  • VRAM Allocated:    {alloc_mb:,.1f} MB (Reserved: {
+                    res_mb:,.1f} MB)"
+            )
     else:
         mem_lines.append(f"  • Compute Device:    {device}")
 
@@ -103,13 +116,19 @@ def on_startup():
     # Optional immediate pre-load to memory on startup via PRELOAD_MODEL env
     preload = os.getenv("PRELOAD_MODEL", "").strip().lower()
     if preload in ("1", "true", "laya"):
-        logger.info("[*] Pre-loading Laya model to memory on startup (PRELOAD_MODEL set)...")
+        logger.info(
+            "[*] Pre-loading Laya model to memory on startup (PRELOAD_MODEL set)..."
+        )
         get_laya()
     elif preload == "vega":
-        logger.info("[*] Pre-loading Vega model to memory on startup (PRELOAD_MODEL set)...")
+        logger.info(
+            "[*] Pre-loading Vega model to memory on startup (PRELOAD_MODEL set)..."
+        )
         get_vega()
     elif preload in ("all", "both"):
-        logger.info("[*] Pre-loading all models to memory on startup (PRELOAD_MODEL set)...")
+        logger.info(
+            "[*] Pre-loading all models to memory on startup (PRELOAD_MODEL set)..."
+        )
         get_laya()
         get_vega()
 
