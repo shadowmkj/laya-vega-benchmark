@@ -1,4 +1,4 @@
-# LAYA-VEGA-BENCHMARK: Real-Time Typed Decision Model Benchmark for Chrome Dino
+# LAYA-VEGA-BENCHMARK: Real-Time Typed Decision Model Benchmark using Chrome Dino
 
 > **A high-speed experimental harness evaluating the 0.8B typed neural decision model (Laya) playing Chrome Dino in real time under latency, jitter, and obstacle clearance constraints.**
 
