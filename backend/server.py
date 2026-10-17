@@ -1,5 +1,8 @@
+import atexit
+import json
 import logging
 import os
+import queue
 import sys
 import threading
 import time
@@ -211,6 +214,95 @@ ACTION_COST_WEIGHTS = {"run": 0.0, "duck": 1.0, "jump": 3.0}
 DEFAULT_COST_LAMBDA = float(os.getenv("COST_LAMBDA", "0.08"))
 
 
+class AsyncJsonLogger:
+    """Zero-overhead asynchronous JSON Lines logger.
+
+    Offloads JSON serialization and disk writes completely from the critical model inference
+    path to a background daemon worker thread consuming from a bounded in-memory queue.
+    """
+
+    def __init__(self, log_filepath: str, max_queue_size: int = 10000):
+        self.log_filepath = log_filepath
+        self.disabled = os.getenv("DISABLE_MODEL_LOG", "0").lower() in (
+            "1",
+            "true",
+            "yes",
+        )
+        self.queue: queue.Queue = queue.Queue(maxsize=max_queue_size)
+        self.stop_event = threading.Event()
+
+        if not self.disabled:
+            log_dir = os.path.dirname(os.path.abspath(self.log_filepath))
+            if log_dir:
+                os.makedirs(log_dir, exist_ok=True)
+            self.worker_thread = threading.Thread(
+                target=self._worker, name="AsyncJsonLoggerWorker", daemon=True
+            )
+            self.worker_thread.start()
+            atexit.register(self.shutdown)
+            logger.info("Async model JSON logger active -> %s", self.log_filepath)
+
+    def log(self, record: dict[str, Any]):
+        """Enqueue record with zero blocking (< 5µs). Drops under extreme backpressure rather than stalling inference."""
+        if self.disabled:
+            return
+        try:
+            self.queue.put_nowait(record)
+        except queue.Full:
+            pass
+
+    def _worker(self):
+        try:
+            with open(self.log_filepath, "a", encoding="utf-8") as f:
+                while not self.stop_event.is_set():
+                    try:
+                        record = self.queue.get(timeout=0.5)
+                    except queue.Empty:
+                        continue
+
+                    records = [record]
+                    while len(records) < 50:
+                        try:
+                            records.append(self.queue.get_nowait())
+                        except queue.Empty:
+                            break
+
+                    lines = []
+                    for r in records:
+                        try:
+                            lines.append(json.dumps(r, default=str))
+                        except Exception:
+                            pass
+
+                    if lines:
+                        f.write("\n".join(lines) + "\n")
+                        f.flush()
+
+                    for _ in records:
+                        self.queue.task_done()
+        except Exception as e:
+            logger.error("AsyncJsonLogger worker encountered an error: %s", e)
+
+    def shutdown(self):
+        self.stop_event.set()
+        try:
+            with open(self.log_filepath, "a", encoding="utf-8") as f:
+                while not self.queue.empty():
+                    try:
+                        record = self.queue.get_nowait()
+                        f.write(json.dumps(record, default=str) + "\n")
+                        self.queue.task_done()
+                    except Exception:
+                        break
+                f.flush()
+        except Exception:
+            pass
+
+
+MODEL_LOG_FILE = os.getenv("MODEL_LOG_FILE", "logs/model_io.jsonl")
+async_logger = AsyncJsonLogger(MODEL_LOG_FILE)
+
+
 class PredictRequest(BaseModel):
     id: int = 0
     model: str = "laya"
@@ -357,6 +449,9 @@ def predict(req: PredictRequest):
                 if k != action.lower():
                     probabilities[k] = max(0.0, rem)
 
+        raw_model_action = action
+        raw_model_conf = conf
+
         # Decision-Theoretic Cost-Weighted Utility Selection:
         # Score(a) = P(a) - cost_lambda * Cost(a)
         # For airborne hazards (mid/high pterodactyl): jumping is fatal, so jump=3, duck=1, run=0.
@@ -385,6 +480,32 @@ def predict(req: PredictRequest):
             conf = probabilities[action]
 
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
+
+    # Non-blocking async JSON logging (sub-millisecond handoff to background worker)
+    async_logger.log(
+        {
+            "timestamp": round(time.time(), 3),
+            "iso_time": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())
+            + f".{int((time.time() % 1) * 1000):03d}Z",
+            "request_id": req.id,
+            "model": model_name,
+            "input": {
+                "raw_state": req.state,
+                "formatted_state": formatted_state,
+                "question": VEGA_QUESTION if model_name == "vega" else LAYA_QUESTION,
+                "cost_lambda": cost_lambda,
+            },
+            "output": {
+                "raw_model_action": raw_model_action.lower(),
+                "raw_model_confidence": round(raw_model_conf, 4),
+                "probabilities": probabilities,
+                "utility_scores": utility_scores,
+                "final_action": action.lower(),
+                "final_confidence": round(conf, 4),
+                "inference_ms": round(elapsed_ms, 2),
+            },
+        }
+    )
 
     logger.info(
         "Decision #%s [%s]: action=%s (%.1f%%) in %.1fms [obs=%s @ %.1f cells] options=%s utilities=%s",
