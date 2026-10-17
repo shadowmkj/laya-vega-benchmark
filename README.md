@@ -2,6 +2,14 @@
 
 > **A high-speed experimental harness evaluating the 0.8B typed neural decision model (Laya) playing Chrome Dino in real time under latency, jitter, and obstacle clearance constraints.**
 
+<p align="center">
+  <a href="laya.mp4">
+    <img src="laya.gif" alt="Laya Dino Autopilot Demo" width="100%" />
+  </a>
+  <br />
+  <em>Real-time Laya 0.8B autopilot with 45ms lag compensation (<a href="laya.mp4">Watch HD 60fps MP4</a>)</em>
+</p>
+
 ---
 
 ## Table of Contents
