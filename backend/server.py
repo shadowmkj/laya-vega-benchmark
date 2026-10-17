@@ -136,11 +136,16 @@ def on_startup():
 LAYA_QUESTION = {
     "action": {
         "type": "choice",
-        "instructions": "Survival maneuver for running dinosaur to avoid oncoming hazard.",
+        "instructions": (
+            "Select the evasive maneuver for the running dinosaur based on the hazard's collision plane:\n"
+            "• Hazard at feet/ground level -> jump upward over it\n"
+            "• Hazard at eye/torso level -> duck low underneath it\n"
+            "• Hazard in the sky overhead -> keep running forward"
+        ),
         "criteria": {
-            "jump": "Ground-level hazard on the track (cactus or low bird). Leap into the air.",
-            "duck": "Mid-height hazard approaching at head level (flying bird). Duck down beneath it.",
-            "run": "Overhead hazard flying high above, or clear distant track. Keep running forward.",
+            "jump": "Collision plane is feet/ground. Leap upward into the open air above.",
+            "duck": "Collision plane is eye/torso. Crouch low into the open space beneath.",
+            "run": "Collision plane is overhead or track is clear. Continue running forward upright.",
         },
     }
 }
@@ -148,11 +153,16 @@ LAYA_QUESTION = {
 VEGA_QUESTION = {
     "action": {
         "type": "choice",
-        "instructions": "Survival maneuver for running dinosaur to avoid oncoming hazard.",
+        "instructions": (
+            "Select the evasive maneuver for the running dinosaur based on the hazard's collision plane:\n"
+            "• Hazard at feet/ground level -> jump upward over it\n"
+            "• Hazard at eye/torso level -> duck low underneath it\n"
+            "• Hazard in the sky overhead -> keep running forward"
+        ),
         "criteria": {
-            "jump": "Ground-level hazard on the track (cactus or low bird). Leap into the air.",
-            "duck": "Mid-height hazard approaching at head level (flying bird). Duck down beneath it.",
-            "run": "Overhead hazard flying high above, or clear distant track. Keep running forward.",
+            "jump": "Collision plane is feet/ground. Leap upward into the open air above.",
+            "duck": "Collision plane is eye/torso. Crouch low into the open space beneath.",
+            "run": "Collision plane is overhead or track is clear. Continue running forward upright.",
         },
     }
 }
@@ -247,37 +257,46 @@ def predict(req: PredictRequest):
         if dist > 8.5 or dist <= 0:
             formatted_state = {
                 "track_condition": "path ahead is clear",
-                "nearest_hazard": "distant in background",
+                "nearest_hazard": "none in immediate range",
+                "collision_plane": "none (track is clear)",
                 "distance": f"{dist:.1f} cells ahead",
-                "dino_posture": status_text,
+                "runner_posture": status_text,
             }
         elif obs_type == "cactus":
             formatted_state = {
-                "track_condition": "ground obstacle ahead",
-                "nearest_hazard": "ground-level cactus",
+                "track_condition": "ground obstacle directly ahead",
+                "nearest_hazard": "cactus on the ground",
+                "collision_plane": "feet / ground level",
+                "clearance_space": "open air above hazard",
                 "distance": f"{dist:.1f} cells ahead",
-                "dino_posture": status_text,
+                "runner_posture": status_text,
             }
         elif obs_type == "pterodactyl" and altitude == "mid":
             formatted_state = {
-                "track_condition": "head-level obstacle ahead",
-                "nearest_hazard": "flying bird approaching at head level",
+                "track_condition": "flying hazard approaching",
+                "nearest_hazard": "pterodactyl flying at mid altitude",
+                "collision_plane": "eye / torso level",
+                "clearance_space": "open space underneath hazard",
                 "distance": f"{dist:.1f} cells ahead",
-                "dino_posture": status_text,
+                "runner_posture": status_text,
             }
         elif obs_type == "pterodactyl" and altitude == "high":
             formatted_state = {
-                "track_condition": "high overhead obstacle",
-                "nearest_hazard": "flying bird high above Dino head",
+                "track_condition": "high hazard overhead",
+                "nearest_hazard": "pterodactyl flying high in sky",
+                "collision_plane": "overhead (passes safely above)",
+                "clearance_space": "full upright running clearance",
                 "distance": f"{dist:.1f} cells ahead",
-                "dino_posture": status_text,
+                "runner_posture": status_text,
             }
         else:  # low pterodactyl or unknown ground hazard
             formatted_state = {
-                "track_condition": "ground obstacle ahead",
-                "nearest_hazard": "ground-skimming low bird",
+                "track_condition": "ground hazard directly ahead",
+                "nearest_hazard": "low pterodactyl skimming the ground",
+                "collision_plane": "feet / ground level",
+                "clearance_space": "open air above hazard",
                 "distance": f"{dist:.1f} cells ahead",
-                "dino_posture": status_text,
+                "runner_posture": status_text,
             }
 
         if budget > 0:
