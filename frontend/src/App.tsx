@@ -50,6 +50,7 @@ export const App: React.FC = () => {
 	const inFlightRef = useRef<boolean>(false);
 	const scheduledTimerRef = useRef<number | null>(null);
 	const jumpedObstaclesRef = useRef<Set<number>>(new Set());
+	const lastSampleTimeRef = useRef<number>(0);
 
 	const triggerReset = () => {
 		jumpedObstaclesRef.current.clear();
@@ -58,6 +59,7 @@ export const App: React.FC = () => {
 			scheduledTimerRef.current = null;
 		}
 		inFlightRef.current = false;
+		lastSampleTimeRef.current = 0;
 		lastInputRef.current = 'RUN';
 		engineRef.current?.reset();
 	};
@@ -120,8 +122,14 @@ export const App: React.FC = () => {
 			}
 		}
 
-		// Only query when an obstacle is within trigger horizon (~8.5 cells) and Dino is grounded
-		if (obs.distance_to_cactus <= 8.5 && obs.distance_to_cactus > 0) {
+		// High-Frequency Autopilot Decision Loop:
+		// 1. Approaching obstacle (within 14 cells): continuous rapid-fire requests as fast as the model can respond!
+		// 2. Clear track or distant obstacle: background telemetry heartbeat every ~350ms to keep RTT & sparkline alive.
+		const isObstacleApproaching = obs.distance_to_cactus <= 14.0 && obs.distance_to_cactus > 0;
+		const isHeartbeatDue = performance.now() - lastSampleTimeRef.current >= 350;
+
+		if (isObstacleApproaching || isHeartbeatDue) {
+			lastSampleTimeRef.current = performance.now();
 			inFlightRef.current = true;
 			const dispatchTime = performance.now();
 			const currentObsId = obs.obstacle_id;
@@ -169,8 +177,8 @@ export const App: React.FC = () => {
 				lastInputRef.current = toAction;
 
 				if (resp.action === 'jump') {
-					// Confirm Dino is still grounded and has not already jumped this obstacle
-					if (engine.state.isGrounded && currentObsId && !jumpedObstaclesRef.current.has(currentObsId)) {
+					// Execute jump when obstacle is within critical strike zone (<= 7.8 cells)
+					if (engine.state.isGrounded && currentObsId && !jumpedObstaclesRef.current.has(currentObsId) && obs.distance_to_cactus <= 7.8) {
 						if (currentRound === 'raw_async') {
 							jumpedObstaclesRef.current.add(currentObsId);
 							engine.jump();
@@ -194,7 +202,8 @@ export const App: React.FC = () => {
 						}
 					}
 				} else if (resp.action === 'duck') {
-					if (engine.state.isGrounded && currentObsId && !jumpedObstaclesRef.current.has(currentObsId)) {
+					// Execute duck when obstacle is within critical strike zone (<= 7.8 cells)
+					if (engine.state.isGrounded && currentObsId && !jumpedObstaclesRef.current.has(currentObsId) && obs.distance_to_cactus <= 7.8) {
 						if (currentRound === 'raw_async') {
 							jumpedObstaclesRef.current.add(currentObsId);
 							engine.duck(true);
@@ -217,7 +226,9 @@ export const App: React.FC = () => {
 						}
 					}
 				} else if (resp.action === 'run') {
-					if (currentObsId) {
+					// Only permanently mark handled if the obstacle is high overhead (safe to run under permanently).
+					// Ground cacti and mid birds must NOT be locked out on distant 'run' so they can trigger when closer!
+					if (currentObsId && obs.obstacle_type === 'pterodactyl' && obs.obstacle_altitude === 'high') {
 						jumpedObstaclesRef.current.add(currentObsId);
 					}
 					// Only stand up if duck was not initiated as a timed maneuver
@@ -298,7 +309,7 @@ export const App: React.FC = () => {
 			<div className="w-full max-w-7xl flex items-center justify-between pb-3 border-b border-zinc-800/80 mb-4 font-mono text-xs">
 				<div className="flex items-center gap-2">
 					<Terminal className="w-4 h-4 text-emerald-400" />
-					<span className="font-bold tracking-wider text-emerald-400">LAYADINO // SYSTEM 2.0</span>
+					<span className="font-bold tracking-wider text-emerald-400">LAYADINO // SYSTEM 1.0</span>
 					<span className="text-zinc-600">|</span>
 					<span className="text-zinc-400">Chrome Dino Typed Decision Model Benchmark</span>
 				</div>
@@ -626,10 +637,10 @@ export const App: React.FC = () => {
 												<div className="flex items-center gap-2">
 													<span
 														className={`px-2.5 py-1 rounded text-xs font-bold border tracking-wider flex items-center gap-1 ${latest.action === 'JUMP'
-																? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
-																: latest.action === 'DUCK'
-																	? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
-																	: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+															? 'bg-amber-500/20 text-amber-300 border-amber-500/50'
+															: latest.action === 'DUCK'
+																? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/50'
+																: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
 															}`}
 													>
 														{latest.action === 'JUMP' ? '▲ JUMP' : latest.action === 'DUCK' ? '▼ DUCK' : '► RUN'}
@@ -741,10 +752,10 @@ export const App: React.FC = () => {
 											<div className="flex items-center gap-1.5">
 												<span
 													className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${m.action === 'JUMP'
-															? 'bg-amber-500/20 text-amber-300'
-															: m.action === 'DUCK'
-																? 'bg-cyan-500/20 text-cyan-300'
-																: 'bg-emerald-500/20 text-emerald-300'
+														? 'bg-amber-500/20 text-amber-300'
+														: m.action === 'DUCK'
+															? 'bg-cyan-500/20 text-cyan-300'
+															: 'bg-emerald-500/20 text-emerald-300'
 														}`}
 												>
 													{m.action}

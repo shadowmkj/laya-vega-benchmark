@@ -137,15 +137,15 @@ LAYA_QUESTION = {
     "action": {
         "type": "choice",
         "instructions": (
-            "Select the evasive maneuver for the running dinosaur based on the hazard's collision plane:\n"
-            "• Hazard at feet/ground level -> jump upward over it\n"
-            "• Hazard at eye/torso level -> duck low underneath it\n"
-            "• Hazard in the sky overhead -> keep running forward"
+            "Select the correct maneuver for the dinosaur based on where the path is blocked:\n"
+            "• Ground track blocked -> jump over it\n"
+            "• Head-height airspace blocked -> duck / crouch underneath it\n"
+            "• Airspace and ground clear -> run forward"
         ),
         "criteria": {
-            "jump": "Collision plane is feet/ground. Leap upward into the open air above.",
-            "duck": "Collision plane is eye/torso. Crouch low into the open space beneath.",
-            "run": "Collision plane is overhead or track is clear. Continue running forward upright.",
+            "jump": "Ground track is blocked (cactus or low hazard). Leap upward into the open air above.",
+            "duck": "Head-height airspace is blocked (mid-flight bird). Crouch low to duck underneath the obstacle.",
+            "run": "Airspace at runner height is completely clear. Continue running upright forward.",
         },
     }
 }
@@ -154,15 +154,15 @@ VEGA_QUESTION = {
     "action": {
         "type": "choice",
         "instructions": (
-            "Select the evasive maneuver for the running dinosaur based on the hazard's collision plane:\n"
-            "• Hazard at feet/ground level -> jump upward over it\n"
-            "• Hazard at eye/torso level -> duck low underneath it\n"
-            "• Hazard in the sky overhead -> keep running forward"
+            "Select the correct maneuver for the dinosaur based on where the path is blocked:\n"
+            "• Ground track blocked -> jump over it\n"
+            "• Head-height airspace blocked -> duck / crouch underneath it\n"
+            "• Airspace and ground clear -> run forward"
         ),
         "criteria": {
-            "jump": "Collision plane is feet/ground. Leap upward into the open air above.",
-            "duck": "Collision plane is eye/torso. Crouch low into the open space beneath.",
-            "run": "Collision plane is overhead or track is clear. Continue running forward upright.",
+            "jump": "Ground track is blocked (cactus or low hazard). Leap upward into the open air above.",
+            "duck": "Head-height airspace is blocked (mid-flight bird). Crouch low to duck underneath the obstacle.",
+            "run": "Airspace at runner height is completely clear. Continue running upright forward.",
         },
     }
 }
@@ -206,10 +206,17 @@ def get_vega():
     return vega_model
 
 
+# Action cost weights: run=0, duck=1, jump=3 (jumping has highest physical commitment & mid-air vulnerability)
+ACTION_COST_WEIGHTS = {"run": 0.0, "duck": 1.0, "jump": 3.0}
+DEFAULT_COST_LAMBDA = float(os.getenv("COST_LAMBDA", "0.08"))
+
+
 class PredictRequest(BaseModel):
     id: int = 0
     model: str = "laya"
     state: dict[str, Any]
+    # Scaling factor for action cost penalty (0.0 to disable)
+    cost_lambda: float = DEFAULT_COST_LAMBDA
 
 
 @app.get("/health")
@@ -252,51 +259,69 @@ def predict(req: PredictRequest):
             budget,
         )
 
-        status_text = "running on ground" if grounded else "airborne"
+        status_text = (
+            "crouching low"
+            if ducking
+            else ("upright stance" if grounded else "airborne")
+        )
 
-        if dist > 8.5 or dist <= 0:
+        if dist > 14.0 or dist <= 0:
             formatted_state = {
-                "track_condition": "path ahead is clear",
-                "nearest_hazard": "none in immediate range",
-                "collision_plane": "none (track is clear)",
+                "ground_track": "clear and unobstructed",
+                "airspace": "open and clear at runner height",
+                "collision_risk": "none (track is clear)",
+                "safe_passage": "running upright passes safely forward",
+                "proximity": "clear path",
                 "distance": f"{dist:.1f} cells ahead",
-                "runner_posture": status_text,
+                "runner_stance": status_text,
             }
         elif obs_type == "cactus":
             formatted_state = {
-                "track_condition": "ground obstacle directly ahead",
-                "nearest_hazard": "cactus on the ground",
-                "collision_plane": "feet / ground level",
-                "clearance_space": "open air above hazard",
+                "ground_track": "blocked by ground cactus",
+                "airspace": "open and clear above",
+                "collision_risk": "staying on ground will collide with cactus on track",
+                "safe_passage": "leaping upward jump maneuver clears cactus",
+                "proximity": "imminent hazard"
+                if dist <= 7.8
+                else "approaching in distance",
                 "distance": f"{dist:.1f} cells ahead",
-                "runner_posture": status_text,
+                "runner_stance": status_text,
             }
         elif obs_type == "pterodactyl" and altitude == "mid":
             formatted_state = {
-                "track_condition": "flying hazard approaching",
-                "nearest_hazard": "pterodactyl flying at mid altitude",
-                "collision_plane": "eye / torso level",
-                "clearance_space": "open space underneath hazard",
+                "ground_track": "clear beneath",
+                "airspace": "blocked at head height by mid-flight pterodactyl",
+                "collision_risk": "running upright will cause head-level collision",
+                "safe_passage": "crouching low duck maneuver slips underneath",
+                "proximity": "imminent hazard"
+                if dist <= 7.8
+                else "approaching in distance",
                 "distance": f"{dist:.1f} cells ahead",
-                "runner_posture": status_text,
+                "runner_stance": status_text,
             }
         elif obs_type == "pterodactyl" and altitude == "high":
             formatted_state = {
-                "track_condition": "high hazard overhead",
-                "nearest_hazard": "pterodactyl flying high in sky",
-                "collision_plane": "overhead (passes safely above)",
-                "clearance_space": "full upright running clearance",
+                "ground_track": "clear and unobstructed",
+                "airspace": "clear at runner height (bird flies high in upper sky)",
+                "collision_risk": "none at runner height (bird flies harmlessly overhead)",
+                "safe_passage": "running upright passes safely underneath",
+                "proximity": "overhead passing"
+                if dist <= 7.8
+                else "approaching in distance",
                 "distance": f"{dist:.1f} cells ahead",
-                "runner_posture": status_text,
+                "runner_stance": status_text,
             }
         else:  # low pterodactyl or unknown ground hazard
             formatted_state = {
-                "track_condition": "ground hazard directly ahead",
-                "nearest_hazard": "low pterodactyl skimming the ground",
-                "collision_plane": "feet / ground level",
-                "clearance_space": "open air above hazard",
+                "ground_track": "blocked by low pterodactyl skimming the ground",
+                "airspace": "open and clear above",
+                "collision_risk": "staying on ground will collide with hazard on track",
+                "safe_passage": "leaping upward jump maneuver clears hazard",
+                "proximity": "imminent hazard"
+                if dist <= 7.8
+                else "approaching in distance",
                 "distance": f"{dist:.1f} cells ahead",
-                "runner_posture": status_text,
+                "runner_stance": status_text,
             }
 
         if budget > 0:
@@ -332,10 +357,37 @@ def predict(req: PredictRequest):
                 if k != action.lower():
                     probabilities[k] = max(0.0, rem)
 
+        # Decision-Theoretic Cost-Weighted Utility Selection:
+        # Score(a) = P(a) - cost_lambda * Cost(a)
+        # For airborne hazards (mid/high pterodactyl): jumping is fatal, so jump=3, duck=1, run=0.
+        # For ground hazards (cacti): jumping is mandatory (jump=0, run=2, duck=2).
+        cost_lambda = (
+            float(req.cost_lambda)
+            if req.cost_lambda is not None
+            else DEFAULT_COST_LAMBDA
+        )
+        is_airborne_hazard = obs_type == "pterodactyl" and altitude in ("mid", "high")
+
+        utility_scores = {}
+        for act_name, prob in probabilities.items():
+            if is_airborne_hazard:
+                cost = ACTION_COST_WEIGHTS.get(act_name, 0.0)
+            elif obs_type == "cactus" or altitude == "ground":
+                # Ground obstacles: jumping has 0 penalty; failing to jump carries penalty
+                cost = 0.0 if act_name == "jump" else 2.0
+            else:
+                cost = 0.0
+            utility_scores[act_name] = round(prob - (cost_lambda * cost), 4)
+
+        if cost_lambda > 0:
+            optimal_action = max(utility_scores.keys(), key=lambda a: utility_scores[a])
+            action = optimal_action
+            conf = probabilities[action]
+
     elapsed_ms = (time.perf_counter() - t0) * 1000.0
 
     logger.info(
-        "Decision #%s [%s]: action=%s (%.1f%%) in %.1fms [obs=%s @ %.1f cells] options=%s",
+        "Decision #%s [%s]: action=%s (%.1f%%) in %.1fms [obs=%s @ %.1f cells] options=%s utilities=%s",
         req.id,
         model_name.upper(),
         action.upper(),
@@ -344,6 +396,7 @@ def predict(req: PredictRequest):
         obs_type,
         dist,
         probabilities,
+        utility_scores,
     )
 
     return {
@@ -352,6 +405,7 @@ def predict(req: PredictRequest):
         "action": action.lower(),
         "confidence": round(conf, 4),
         "probabilities": probabilities,
+        "utility_scores": utility_scores,
         "inference_ms": round(elapsed_ms, 2),
     }
 
