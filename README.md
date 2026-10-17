@@ -233,7 +233,10 @@ python backend/benchmark.py --model laya -n 50 --warmup 5
 
 ## 7. Limitations of the Laya Model
 
->[!NOTE] *Quick heads-up: These points are just based on what I personally observed while tinkering with and benchmarking the model. Take them with a grain of salt—I could be right or wrong here, as I'm still learning how Laya works under the hood! With that said, here is what I ran into during testing:*
+> [!NOTE]
+> *Quick heads-up: These points are just based on what I personally observed while tinkering with and benchmarking the model.
+> Take them with a grain of salt—I could be right or wrong here, as I'm still learning how Laya works under the hood!
+> With that said, here is what I ran into during testing:*
 
 1. **It latches onto keywords rather than reasoning things through**:
    Because it's a small 0.8B model, it relies heavily on simple word associations rather than deep logic. For example, if the input state mentions the word `"running"`, the model naturally wants to choose `"run"`—even when a bird is right in front of the Dino.
