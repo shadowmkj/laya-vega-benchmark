@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LAYADINO Inference Latency Benchmarker
+LAYA-VEGA-BENCHMARK Inference Latency Benchmarker
 Measures client round-trip latency, server inference time, jitter, and deadline miss rates.
 """
 
@@ -223,11 +223,11 @@ def print_report(res: Dict[str, Any]):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="LAYADINO Inference Latency Benchmark",
+        description="LAYA-VEGA-BENCHMARK Inference Latency Benchmark",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument("--url", default="http://localhost:8000", help="FastAPI Server base URL")
-    parser.add_argument("--model", choices=["laya", "vega", "both"], default="laya", help="Model to benchmark")
+    parser.add_argument("--model", choices=["laya"], default="laya", help="Model to benchmark")
     parser.add_argument("-n", "--count", type=int, default=20, help="Number of benchmark requests")
     parser.add_argument("--warmup", type=int, default=2, help="Number of initial warmup requests")
     parser.add_argument("--budget", type=float, default=0.0, help="Latency budget ms (0=Raw Async, 45=Fixed Hold)")
@@ -245,7 +245,7 @@ def main():
         sys.exit(1)
     print(f"[✓] Backend server is healthy.")
 
-    models_to_test = ["laya", "vega"] if args.model == "both" else [args.model]
+    models_to_test = ["laya"]
     results = {}
 
     for m in models_to_test:

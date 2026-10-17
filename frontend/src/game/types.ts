@@ -1,4 +1,4 @@
-export type DriverMode = 'human' | 'laya' | 'vega';
+export type DriverMode = 'human' | 'laya';
 export type ExperimentRound = 'raw_async' | 'fixed_45ms_hold';
 
 export interface Obstacle {

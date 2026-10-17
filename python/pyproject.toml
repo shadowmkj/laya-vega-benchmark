@@ -1,5 +1,5 @@
 [project]
-name = "layadino-worker"
+name = "laya-vega-benchmark-worker"
 version = "0.1.0"
 description = "Inference worker for Laya and Vega decision models"
 requires-python = ">=3.12"

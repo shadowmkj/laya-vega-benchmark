@@ -8,7 +8,7 @@ export interface MoveHistoryItem {
   id: string;
   timestamp: number;
   timeString: string;
-  driver: 'laya' | 'vega' | 'human';
+  driver: 'laya' | 'human';
   fromAction: string;
   action: 'JUMP' | 'DUCK' | 'RUN';
   confidence: number;

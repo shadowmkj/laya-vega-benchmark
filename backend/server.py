@@ -34,7 +34,7 @@ if not any(isinstance(h, logging.StreamHandler) for h in logger.handlers):
     )
     logger.addHandler(sh)
 
-app = fastapi.FastAPI(title="Dino Decision Brain Server")
+app = fastapi.FastAPI(title="Laya-Vega-Benchmark Decision Server")
 
 app.add_middleware(
     CORSMiddleware,
@@ -46,7 +46,6 @@ app.add_middleware(
 
 model_lock = threading.Lock()
 laya_model = None
-vega_model = None
 
 
 def log_model_memory_loaded(model_name: str, device: str, elapsed_s: float):
@@ -111,29 +110,17 @@ def on_startup():
         "FastAPI Decision Backend initialized. PyTorch compute target: %s", device
     )
     logger.info(
-        "Model status: Laya=%s, Vega=%s",
+        "Model status: Laya=%s",
         "Loaded" if laya_model else "Standby",
-        "Loaded" if vega_model else "Standby",
     )
 
     # Optional immediate pre-load to memory on startup via PRELOAD_MODEL env
     preload = os.getenv("PRELOAD_MODEL", "").strip().lower()
-    if preload in ("1", "true", "laya"):
+    if preload in ("1", "true", "laya", "all", "both"):
         logger.info(
             "[*] Pre-loading Laya model to memory on startup (PRELOAD_MODEL set)..."
         )
         get_laya()
-    elif preload == "vega":
-        logger.info(
-            "[*] Pre-loading Vega model to memory on startup (PRELOAD_MODEL set)..."
-        )
-        get_vega()
-    elif preload in ("all", "both"):
-        logger.info(
-            "[*] Pre-loading all models to memory on startup (PRELOAD_MODEL set)..."
-        )
-        get_laya()
-        get_vega()
 
 
 LAYA_QUESTION = {
@@ -188,25 +175,6 @@ def get_laya():
         elapsed = time.perf_counter() - t_start
         log_model_memory_loaded("convaiinnovations/laya", device, elapsed)
     return laya_model
-
-
-def get_vega():
-    global vega_model
-    if vega_model is None:
-        import torch
-
-        # NOTE: On Apple Silicon without CUDA, CPU runs the PyTorch
-        # chunked delta rule kernels ~5.4x faster than MPS (12s vs 67s)
-        # due to vector SIMD cache locality.
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        logger.info("[*] Loading Vega model on compute device: %s...", device)
-        t_start = time.perf_counter()
-        import vegaml
-
-        vega_model = vegaml.load(device=device)
-        elapsed = time.perf_counter() - t_start
-        log_model_memory_loaded("vegaml", device, elapsed)
-    return vega_model
 
 
 # Action cost weights: run=0, duck=1, jump=3 (jumping has highest physical commitment & mid-air vulnerability)
@@ -315,10 +283,9 @@ class PredictRequest(BaseModel):
 def health():
     return {
         "status": "ok",
-        "models": ["laya", "vega"],
+        "models": ["laya"],
         "loaded": {
             "laya": laya_model is not None,
-            "vega": vega_model is not None,
         },
     }
 
@@ -419,20 +386,12 @@ def predict(req: PredictRequest):
         if budget > 0:
             formatted_state["latency_budget"] = f"{budget:.0f}ms"
 
-        if model_name == "vega":
-            v = get_vega()
-            res = v.decide(formatted_state, VEGA_QUESTION)
-            ans = res.get("answers", {}).get("action", {})
-            action = ans.get("choice", "run")
-            conf = float(ans.get("confidence", 0.9))
-            raw_probs = ans.get("probs", {})
-        else:
-            l = get_laya()
-            res = l.predict(state=formatted_state, questions=LAYA_QUESTION)
-            ans = res.get("answers", {}).get("action", {})
-            action = ans.get("choice", "run")
-            conf = float(ans.get("answer_confidence", ans.get("confidence", 0.9)))
-            raw_probs = ans.get("probabilities", {})
+        l = get_laya()
+        res = l.predict(state=formatted_state, questions=LAYA_QUESTION)
+        ans = res.get("answers", {}).get("action", {})
+        action = ans.get("choice", "run")
+        conf = float(ans.get("answer_confidence", ans.get("confidence", 0.9)))
+        raw_probs = ans.get("probabilities", {})
 
         probabilities = {
             "jump": 0.0,
@@ -492,7 +451,7 @@ def predict(req: PredictRequest):
             "input": {
                 "raw_state": req.state,
                 "formatted_state": formatted_state,
-                "question": VEGA_QUESTION if model_name == "vega" else LAYA_QUESTION,
+                "question": LAYA_QUESTION,
                 "cost_lambda": cost_lambda,
             },
             "output": {

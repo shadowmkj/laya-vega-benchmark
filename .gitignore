@@ -13,6 +13,7 @@ __pycache__/
 .env.local
 .DS_Store
 
-# Logs
+# Logs & Temp
 logs/
 *.jsonl
+tmp/

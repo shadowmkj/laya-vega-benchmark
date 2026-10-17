@@ -39,7 +39,7 @@ export async function checkBackendHealth(targetUrl?: string): Promise<boolean> {
 }
 
 export async function requestPrediction(
-  model: 'laya' | 'vega',
+  model: 'laya',
   state: DinoObservation
 ): Promise<PredictResponse> {
   const base = getBackendUrl();

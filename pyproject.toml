@@ -1,5 +1,5 @@
 [project]
-name = "layadino"
+name = "laya-vega-benchmark"
 version = "0.1.0"
 description = "Chrome Dino Typed Decision Model Benchmark for Laya and Vega"
 requires-python = ">=3.12,<3.13"

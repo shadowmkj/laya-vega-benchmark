@@ -1,5 +1,5 @@
 [package]
-name = "layadino"
+name = "laya-vega-benchmark"
 version = "0.1.0"
 edition = "2021"
 
@@ -15,5 +15,5 @@ name = "layadino"
 path = "src/lib.rs"
 
 [[bin]]
-name = "layadino"
+name = "laya-vega-benchmark"
 path = "src/main.rs"

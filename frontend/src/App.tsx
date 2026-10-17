@@ -39,7 +39,6 @@ export const App: React.FC = () => {
 	});
 
 	const trackerLayaRef = useRef(new TelemetryTracker());
-	const trackerVegaRef = useRef(new TelemetryTracker());
 	const [metrics, setMetrics] = useState<TelemetryMetrics>(trackerLayaRef.current.getMetrics());
 
 	// Live move history & input transition tracking
@@ -135,8 +134,8 @@ export const App: React.FC = () => {
 			const currentObsId = obs.obstacle_id;
 
 			try {
-				const resp = await requestPrediction(currentDriver, obs);
-				const tracker = currentDriver === 'vega' ? trackerVegaRef.current : trackerLayaRef.current;
+				const resp = await requestPrediction('laya', obs);
+				const tracker = trackerLayaRef.current;
 				const clientRttMs = Math.round((performance.now() - dispatchTime) * 10) / 10;
 
 				const probs: MoveOptionProbabilities = {
@@ -269,7 +268,7 @@ export const App: React.FC = () => {
 				}
 			} else if (e.key === 'm' || e.key === 'Tab') {
 				e.preventDefault();
-				setDriver((prev) => (prev === 'human' ? 'laya' : prev === 'laya' ? 'vega' : 'human'));
+				setDriver((prev) => (prev === 'human' ? 'laya' : 'human'));
 			} else if (e.key === 'h') {
 				e.preventDefault();
 				setRound((prev) => (prev === 'raw_async' ? 'fixed_45ms_hold' : 'raw_async'));
@@ -309,7 +308,7 @@ export const App: React.FC = () => {
 			<div className="w-full max-w-7xl flex items-center justify-between pb-3 border-b border-zinc-800/80 mb-4 font-mono text-xs">
 				<div className="flex items-center gap-2">
 					<Terminal className="w-4 h-4 text-emerald-400" />
-					<span className="font-bold tracking-wider text-emerald-400">LAYADINO // SYSTEM 1.0</span>
+					<span className="font-bold tracking-wider text-emerald-400">LAYA-VEGA-BENCHMARK // SYSTEM 1.0</span>
 					<span className="text-zinc-600">|</span>
 					<span className="text-zinc-400">Chrome Dino Typed Decision Model Benchmark</span>
 				</div>
@@ -404,11 +403,7 @@ export const App: React.FC = () => {
 							<div className="flex items-center gap-2">
 								<span className="px-2.5 py-1 rounded bg-zinc-900 border border-zinc-700 text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
 									<Cpu className="w-3.5 h-3.5" />
-									{driver === 'human'
-										? 'DRIVER: [HUMAN]'
-										: driver === 'laya'
-											? 'DRIVER: [LAYA (0.8B)]'
-											: 'DRIVER: [VEGA (0.8B)]'}
+									{driver === 'human' ? 'DRIVER: [HUMAN]' : 'DRIVER: [LAYA (0.8B)]'}
 								</span>
 								<span className="px-2.5 py-1 rounded bg-zinc-900 border border-zinc-700 text-xs font-semibold text-purple-400">
 									{round === 'raw_async' ? 'ROUND 1: RAW ASYNC' : 'ROUND 2: FIXED 45ms HOLD'}
@@ -440,7 +435,7 @@ export const App: React.FC = () => {
 							{/* Driver Switcher */}
 							<div className="flex items-center gap-1.5">
 								<span className="text-zinc-500 mr-1">CONTROLLER:</span>
-								{(['human', 'laya', 'vega'] as DriverMode[]).map((m) => (
+								{(['human', 'laya'] as DriverMode[]).map((m) => (
 									<button
 										key={m}
 										onClick={() => setDriver(m)}
@@ -733,7 +728,7 @@ export const App: React.FC = () => {
 							) : (
 								<div className="py-6 text-center text-zinc-600 space-y-1">
 									<div className="text-xs">Awaiting AI decisions...</div>
-									<div className="text-[11px] text-zinc-600">Switch to LAYA or VEGA autopilot to record move history and live option confidences.</div>
+									<div className="text-[11px] text-zinc-600">Switch to LAYA autopilot to record move history and live option confidences.</div>
 								</div>
 							)}
 						</div>
