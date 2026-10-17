@@ -136,11 +136,11 @@ def on_startup():
 LAYA_QUESTION = {
     "action": {
         "type": "choice",
-        "instructions": "Chrome Dino survival decision. Choose whether to jump, duck, or run.",
+        "instructions": "Determine the required action to avoid the oncoming obstacle.",
         "criteria": {
-            "jump": "A ground cactus or low hazard is dangerously close. Leap over it immediately.",
-            "duck": "A flying pterodactyl is dangerously close at head height. Duck underneath it immediately.",
-            "run": "Track ahead is clear, obstacle is distant, or bird is high overhead. Continue forward.",
+            "jump": "Jump over a ground obstacle (cactus or low-flying pterodactyl).",
+            "duck": "Duck underneath a head-height obstacle (mid-level flying pterodactyl).",
+            "run": "Run forward safely (high-flying pterodactyl overhead, or clear path).",
         },
     }
 }
@@ -148,11 +148,11 @@ LAYA_QUESTION = {
 VEGA_QUESTION = {
     "action": {
         "type": "choice",
-        "instructions": "Chrome Dino survival decision. Choose whether to jump, duck, or run.",
+        "instructions": "Determine the required action to avoid the oncoming obstacle.",
         "criteria": {
-            "jump": "A ground cactus or low hazard is dangerously close. Leap over it immediately.",
-            "duck": "A flying pterodactyl is dangerously close at head height. Duck underneath it immediately.",
-            "run": "Track ahead is clear, obstacle is distant, or bird is high overhead. Continue forward.",
+            "jump": "Jump over a ground obstacle (cactus or low-flying pterodactyl).",
+            "duck": "Duck underneath a head-height obstacle (mid-level flying pterodactyl).",
+            "run": "Run forward safely (high-flying pterodactyl overhead, or clear path).",
         },
     }
 }
@@ -242,32 +242,53 @@ def predict(req: PredictRequest):
             budget,
         )
 
-        if obs_type == "cactus":
-            obstacle_desc = "ground cactus"
-        elif obs_type == "pterodactyl":
-            if altitude == "mid":
-                obstacle_desc = "flying pterodactyl at head height"
-            elif altitude == "high":
-                obstacle_desc = "flying pterodactyl high overhead"
-            else:
-                obstacle_desc = "flying pterodactyl low to the ground"
-        else:
-            obstacle_desc = f"{obs_type} ({altitude})"
+        status_text = "on ground" if grounded else "airborne"
 
-        if 0 < dist <= 7.5:
-            proximity = f"dangerously close ({dist:.1f} cells ahead)"
-        elif dist <= 12.0:
-            proximity = f"approaching ({dist:.1f} cells ahead)"
-        else:
-            proximity = f"distant ({dist:.1f} cells ahead)"
+        if dist > 8.5 or dist <= 0:
+            formatted_state = {
+                "obstacle": "distant obstacle / clear track",
+                "obstacle_height": "safe distance ahead",
+                "action": "run forward safely",
+                "status": status_text,
+            }
+        elif obs_type == "cactus":
+            formatted_state = {
+                "obstacle": "ground cactus",
+                "obstacle_height": "ground level obstacle",
+                "action": "jump over ground obstacle",
+                "distance": f"{dist:.1f} cells ahead",
+                "status": status_text,
+            }
+        elif obs_type == "pterodactyl" and altitude == "mid":
+            formatted_state = {
+                "obstacle": "mid-level flying pterodactyl",
+                "obstacle_height": "head level obstacle",
+                "action": "duck underneath obstacle",
+                "distance": f"{dist:.1f} cells ahead",
+                "status": status_text,
+            }
+        elif obs_type == "pterodactyl" and altitude == "high":
+            formatted_state = {
+                "obstacle": "high-flying pterodactyl",
+                "obstacle_height": "high overhead obstacle",
+                "action": "run forward safely",
+                "distance": f"{dist:.1f} cells ahead",
+                "status": status_text,
+            }
+        else:  # low pterodactyl or unknown ground hazard
+            formatted_state = {
+                "obstacle": "low-flying pterodactyl",
+                "obstacle_height": "ground level obstacle",
+                "action": "jump over ground obstacle",
+                "distance": f"{dist:.1f} cells ahead",
+                "status": status_text,
+            }
+
+        if budget > 0:
+            formatted_state["latency_budget"] = f"{budget:.0f}ms"
 
         if model_name == "vega":
             v = get_vega()
-            formatted_state = (
-                f"Obstacle: {obstacle_desc}. Distance: {proximity}. "
-                f"Position: {'on ground' if grounded else 'airborne'}. "
-                f"Latency budget: {budget:.0f}ms."
-            )
             res = v.decide(formatted_state, VEGA_QUESTION)
             ans = res.get("answers", {}).get("action", {})
             action = ans.get("choice", "run")
@@ -275,13 +296,6 @@ def predict(req: PredictRequest):
             raw_probs = ans.get("probs", {})
         else:
             l = get_laya()
-            formatted_state = {
-                "obstacle": obstacle_desc,
-                "distance": proximity,
-                "position": "on ground" if grounded else "airborne",
-            }
-            if budget > 0:
-                formatted_state["latency_budget"] = f"{budget:.0f}ms"
             res = l.predict(state=formatted_state, questions=LAYA_QUESTION)
             ans = res.get("answers", {}).get("action", {})
             action = ans.get("choice", "run")
